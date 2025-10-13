@@ -1,135 +1,184 @@
-#include <stdio.h>      // Biblioteca padrão de entrada e saída: printf, scanf, fgets, fprintf, etc.
-#include <string.h>     // Biblioteca para manipulação de strings: strcmp, strcspn, strlen, etc.
-#include <stdlib.h>     // Biblioteca padrão: funções de conversão (atoi), system(), malloc(), free(), etc.
-#include <locale.h>     // Biblioteca para configuração de localização (acentuação, moeda, datas, etc.)
+// ============================================================================
+// BIBLIOTECAS UTILIZADAS
+// ============================================================================
 
-#define MAX 100          // Define uma constante simbólica MAX com valor 100
+#include <stdio.h>      // Biblioteca padrão de entrada/saída — printf, fgets, fprintf, etc.
+#include <string.h>     // Biblioteca para manipulação de strings — strcmp, strcspn, sscanf, etc.
+#include <stdlib.h>     // Biblioteca padrão — funções de conversão (atoi), system(), malloc(), etc.
+#include <locale.h>     // Biblioteca para suporte à acentuação e formatação regional
+#include <windows.h>    // Biblioteca do Windows para configurar codificação UTF-8 no console
 
-// Estrutura para armazenar informações de um usuário
+#define MAX 100         // Define uma constante simbólica chamada MAX com valor 100 (não usada aqui, mas útil como padrão)
+
+// ============================================================================
+// DEFINIÇÃO DE ESTRUTURA (TIPO DE DADO USUÁRIO)
+// ============================================================================
+
+// Estrutura que armazena informações básicas de um usuário do sistema
 typedef struct {
-    char usuario[50];    // Campo que armazena o nome do usuário
-    char senha[50];      // Campo que armazena a senha do usuário
-} Usuario;               // Define o tipo de dado "Usuario"
+    char usuario[50];   // Campo para o nome de usuário (até 49 caracteres + terminador '\0')
+    char senha[50];     // Campo para a senha do usuário (até 49 caracteres + terminador '\0')
+} Usuario;              // O nome do tipo de dado criado é "Usuario"
 
-// Função para limpar a tela do console (funciona em Windows e Linux)
+// ============================================================================
+// CONFIGURAÇÃO DE CODIFICAÇÃO (UTF-8)
+// ============================================================================
+
+// Esta função garante que o console do Windows exiba acentuação corretamente (UTF-8)
+void configurarCodificacao() {
+#ifdef _WIN32                      // Diretiva de pré-processador: se o código estiver sendo compilado no Windows...
+    SetConsoleOutputCP(65001);     // Define a codificação de saída do console como UTF-8 (para printf)
+    SetConsoleCP(65001);           // Define a codificação de entrada do console como UTF-8 (para fgets)
+#endif
+    setlocale(LC_ALL, "pt_BR.UTF-8"); // Configura o idioma e formatação do sistema para português (Brasil) com suporte UTF-8
+}
+
+// ============================================================================
+// FUNÇÃO PARA LIMPAR A TELA
+// ============================================================================
+
+// Limpa o console, independentemente do sistema operacional (Windows ou Linux)
 void limparTela() {
-#ifdef _WIN32             // Diretiva que verifica se o sistema é Windows
-    system("cls");        // Comando para limpar a tela no Windows
+#ifdef _WIN32          // Se o sistema for Windows
+    system("cls");     // Usa o comando interno "cls" para limpar a tela
 #else
-    system("clear");      // Comando para limpar a tela no Linux/Unix
+    system("clear");   // Caso contrário (Linux, Mac), usa o comando "clear"
 #endif
 }
 
-// Função para cadastrar um novo usuário
-void cadastrarUsuario() {
-    setlocale(LC_ALL, "Portuguese");             // Suporte à acentuação em português
-    Usuario u;                                   // Cria uma variável 'u' do tipo Usuario
+// ============================================================================
+// FUNÇÃO PARA CADASTRAR USUÁRIO (ALUNO OU PROFESSOR)
+// ============================================================================
 
-    FILE *f = fopen("usuarios.txt", "a");       // Abre o arquivo no modo append (adicionar ao final)
-    if (!f) {                                   // Verifica se o arquivo abriu corretamente
-        printf("Erro ao abrir o arquivo!\n");   // Mensagem de erro
-        return;                                 // Sai da função
+// Recebe o nome do arquivo (onde será salvo) e o tipo ("Aluno" ou "Professor")
+void cadastrarUsuario(const char *arquivo, const char *tipo) {
+    Usuario u;                                 // Cria uma variável 'u' do tipo Usuario
+    FILE *f = fopen(arquivo, "a");             // Abre o arquivo no modo append ('a' = adicionar sem apagar conteúdo anterior)
+
+    if (!f) {                                  // Se o arquivo não foi aberto corretamente
+        printf("Erro ao abrir o arquivo de %s!\n", tipo); // Exibe mensagem de erro indicando qual tipo falhou
+        return;                                // Encerra a função
     }
 
-    printf("=== Cadastro de Usuário ===\n");    // Exibe o cabeçalho
-    printf("Digite o nome de usuário: ");       // Solicita o nome do usuário
-    fgets(u.usuario, sizeof(u.usuario), stdin); // Lê o nome digitado
-    u.usuario[strcspn(u.usuario, "\n")] = 0;    // Remove o '\n' do final
+    printf("=== Cadastro de %s ===\n", tipo);  // Cabeçalho informativo
+    printf("Digite o nome de usuário: ");      // Solicita que o usuário digite um nome
 
-    printf("Digite a senha: ");                 // Solicita a senha
-    fgets(u.senha, sizeof(u.senha), stdin);     // Lê a senha digitada
-    u.senha[strcspn(u.senha, "\n")] = 0;        // Remove o '\n' do final
+    fgets(u.usuario, sizeof(u.usuario), stdin); // Lê a string digitada (inclui o '\n' no final)
+    u.usuario[strcspn(u.usuario, "\n")] = 0;    // Substitui o '\n' (ENTER) por '\0', removendo-o da string
 
-    // Grava no formato usuario:senha (mais seguro e fácil de ler)
+    printf("Digite a senha: ");                // Solicita a senha
+    fgets(u.senha, sizeof(u.senha), stdin);    // Lê a senha digitada
+    u.senha[strcspn(u.senha, "\n")] = 0;       // Remove o '\n' final da senha também
+
+    // Escreve no arquivo no formato "usuario:senha", facilitando leitura posterior
     fprintf(f, "%s:%s\n", u.usuario, u.senha);
 
-    fclose(f);                                  // Fecha o arquivo
-    printf("Usuário cadastrado com sucesso!\n"); // Mensagem de confirmação
+    fclose(f);                                 // Fecha o arquivo para salvar os dados
+    printf("%s cadastrado(a) com sucesso!\n", tipo); // Confirma que o cadastro foi feito
 }
 
-// Função para realizar login
-int login() {
-    setlocale(LC_ALL, "Portuguese");             // Suporte à acentuação
-    char usuario[50], senha[50];                 // Armazena o que o usuário digitar
-    char u[50], s[50];                           // Armazena o que vem do arquivo
-    int logado = 0;                              // 0 = não logado, 1 = logado
+// ============================================================================
+// FUNÇÃO PARA LOGIN DE USUÁRIO (ALUNO OU PROFESSOR)
+// ============================================================================
 
-    FILE *f = fopen("usuarios.txt", "r");        // Abre o arquivo em modo leitura
-    if (!f) {                                    // Se o arquivo não existe
-        printf("Nenhum usuário cadastrado. Cadastre primeiro.\n");
-        return 0;                                // Retorna falha
+// Recebe o nome do arquivo (onde os dados estão salvos) e o tipo ("Aluno" ou "Professor")
+int loginUsuario(const char *arquivo, const char *tipo) {
+    Usuario u;                                 // Variável para armazenar usuário lido do arquivo
+    char usuario[50], senha[50];               // Variáveis para armazenar o que o usuário digitará
+    char linha[200];                           // Buffer para armazenar cada linha do arquivo
+    int logado = 0;                            // Flag de controle (0 = não logado, 1 = logado)
+
+    FILE *f = fopen(arquivo, "r");             // Abre o arquivo no modo leitura
+    if (!f) {                                  // Se não conseguiu abrir (por exemplo, arquivo não existe ainda)
+        printf("Nenhum %s cadastrado ainda.\n", tipo); // Mensagem de aviso
+        return 0;                              // Retorna 0 (falha no login)
     }
 
-    printf("=== Login ===\n");
-    printf("Digite o usuário: ");
-    fgets(usuario, sizeof(usuario), stdin);      // Lê o usuário digitado
-    usuario[strcspn(usuario, "\n")] = 0;         // Remove o '\n'
+    printf("=== Login de %s ===\n", tipo);     // Cabeçalho do login
+    printf("Digite o usuário: ");              // Solicita o nome de usuário
+    fgets(usuario, sizeof(usuario), stdin);    // Lê o nome digitado
+    usuario[strcspn(usuario, "\n")] = 0;       // Remove o '\n'
 
-    printf("Digite a senha: ");
-    fgets(senha, sizeof(senha), stdin);          // Lê a senha digitada
-    senha[strcspn(senha, "\n")] = 0;             // Remove o '\n'
+    printf("Digite a senha: ");                // Solicita a senha
+    fgets(senha, sizeof(senha), stdin);        // Lê a senha digitada
+    senha[strcspn(senha, "\n")] = 0;           // Remove o '\n'
 
-    char linha[200];                             // Buffer para cada linha do arquivo
-    while (fgets(linha, sizeof(linha), f)) {     // Lê linha por linha até o fim
-        // Separa a parte antes e depois do ':'
-        sscanf(linha, "%[^:]:%[^\n]", u, s);     // Lê tudo até ':' em 'u' e o restante em 's'
+    // Loop para percorrer o arquivo linha por linha
+    while (fgets(linha, sizeof(linha), f)) {   // Lê cada linha até o final (EOF)
+        // Divide a linha em duas partes: antes e depois dos dois-pontos ':'
+        sscanf(linha, "%[^:]:%[^\n]", u.usuario, u.senha); // Copia até ':' para u.usuario e depois para u.senha
 
-        // Compara o que o usuário digitou com o que está no arquivo
-        if (strcmp(usuario, u) == 0 && strcmp(senha, s) == 0) {
-            logado = 1;                          // Marca login como bem-sucedido
-            break;                               // Encerra o loop
+        // Compara se o usuário e senha digitados coincidem com os do arquivo
+        if (strcmp(usuario, u.usuario) == 0 && strcmp(senha, u.senha) == 0) {
+            logado = 1;                        // Marca como logado
+            break;                             // Sai do loop, pois já encontrou o usuário
         }
     }
 
-    fclose(f);                                   // Fecha o arquivo após leitura
+    fclose(f);                                 // Fecha o arquivo após leitura
 
-    if (logado) {                                // Se logado com sucesso
-        printf("Login realizado com sucesso! Bem-vindo, %s\n", usuario);
-        return 1;                                // Retorna sucesso
-    } else {
-        printf("Usuário ou senha incorretos.\n"); // Caso contrário, erro
-        return 0;                                // Retorna falha
+    if (logado) {                              // Se o login foi bem-sucedido
+        printf("Login realizado com sucesso! Bem-vindo(a), %s (%s)\n", usuario, tipo);
+        return 1;                              // Retorna 1 indicando sucesso
+    } else {                                   // Caso contrário...
+        printf("Usuário ou senha incorretos.\n");
+        return 0;                              // Retorna 0 (falha)
     }
 }
 
-// Função que exibe o menu principal
-void menuPrincipal() {
-    setlocale(LC_ALL, "Portuguese");             // Configura acentuação
-    int opcao;                                   // Guarda a opção escolhida
+// ============================================================================
+// MENU PRINCIPAL — ESCOLHA ENTRE ALUNO OU PROFESSOR
+// ============================================================================
 
-    do {
+void menuTipoUsuario() {
+    int opcao;                                 // Variável para armazenar a opção escolhida
+    char buffer[10];                           // Buffer temporário para leitura da opção como string
+
+    do {                                       // Loop que mantém o menu até o usuário decidir sair
         printf("\n==============================\n");
-        printf("==== Bem Vindo ao EduGate ====\n");
+        printf("====== Portal EduGate ======\n");
         printf("==============================\n");
-        printf("1. Login\n");
-        printf("2. Cadastro\n");
-        printf("3. Sair\n");
-        printf("Escolha uma opção: ");
+        printf("1. Login de Aluno\n");         // Opção 1 — Login de Aluno
+        printf("2. Cadastro de Aluno\n");      // Opção 2 — Cadastro de Aluno
+        printf("3. Login de Professor\n");     // Opção 3 — Login de Professor
+        printf("4. Cadastro de Professor\n");  // Opção 4 — Cadastro de Professor
+        printf("5. Sair\n");                   // Opção 5 — Encerrar o programa
+        printf("Escolha uma opção: ");         // Solicita escolha
 
-        char buffer[10];                         // Buffer temporário para entrada
-        fgets(buffer, sizeof(buffer), stdin);    // Lê entrada como string
-        opcao = atoi(buffer);                    // Converte para inteiro
+        fgets(buffer, sizeof(buffer), stdin);  // Lê a opção digitada como string
+        opcao = atoi(buffer);                  // Converte para inteiro (ex: "2" → 2)
 
-        switch (opcao) {                         // Analisa a opção
+        limparTela();                          // Limpa a tela após cada escolha
+
+        switch (opcao) {                       // Verifica qual opção foi escolhida
             case 1:
-                login();                         // Chama o login
+                loginUsuario("alunos.txt", "Aluno");       // Login de aluno
                 break;
             case 2:
-                cadastrarUsuario();              // Chama o cadastro
+                cadastrarUsuario("alunos.txt", "Aluno");   // Cadastro de aluno
                 break;
             case 3:
-                printf("Saindo do sistema...\n");// Mensagem de saída
+                loginUsuario("professores.txt", "Professor"); // Login de professor
+                break;
+            case 4:
+                cadastrarUsuario("professores.txt", "Professor"); // Cadastro de professor
+                break;
+            case 5:
+                printf("Saindo do sistema...\n");          // Mensagem de encerramento
                 break;
             default:
-                printf("Opção inválida! Tente novamente.\n");
+                printf("Opção inválida! Tente novamente.\n"); // Mensagem de erro
         }
-    } while (opcao != 3);                        // Repete até escolher sair
+    } while (opcao != 5);                      // Repete o menu até que a opção 5 seja escolhida
 }
 
-// Função principal do programa
+// ============================================================================
+// FUNÇÃO PRINCIPAL (main)
+// ============================================================================
+
 int main() {
-    setlocale(LC_ALL, "Portuguese");             // Suporte à acentuação
-    limparTela();                                // Limpa a tela
-    menuPrincipal();                             // Chama o menu principal
-    return 0;                                    // Finaliza o programa com sucesso
+    configurarCodificacao();                   // Garante que os acentos apareçam corretamente
+    limparTela();                              // Limpa a tela antes de começar
+    menuTipoUsuario();                         // Chama o menu principal (portal EduGate)
+    return 0;                                  // Encerra o programa com código de sucesso
 }
