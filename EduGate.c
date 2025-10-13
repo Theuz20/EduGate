@@ -8,7 +8,7 @@
 #include <locale.h>     // Biblioteca para suporte à acentuação e formatação regional
 #include <windows.h>    // Biblioteca do Windows para configurar codificação UTF-8 no console
 
-#define MAX 100         // Define uma constante simbólica chamada MAX com valor 100 (não usada aqui, mas útil como padrão)
+#define MAX 100         // Define uma constante simbólica chamada MAX com valor 100
 
 // ============================================================================
 // DEFINIÇÃO DE ESTRUTURA (TIPO DE DADO USUÁRIO)
