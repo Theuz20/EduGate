@@ -17,8 +17,13 @@ void registrarAula();       // Função para registra aula (diario eletronico)
 void excluirRegistroAula(); // Função para excluir registros de aula
 void enviarAtividade();      // Função principal de envio/listagem/exclusão de atividades
 void excluirAtividade();     // Função para excluir uma atividade específica
-
-
+void listarTurmasDoAluno(const char *usuarioAluno);
+void sairDeTurma(const char *usuarioAluno);
+void verAtividadesAluno(const char *usuarioAluno);
+void verAulasAgendadas(const char *usuarioAluno);
+void verNotasAluno(const char *usuarioAluno);
+void matricularEmTurma(const char *usuarioAluno);
+void menuAluno(const char *usuarioAluno);
 
 #define MAX 100
 
@@ -28,6 +33,7 @@ void excluirAtividade();     // Função para excluir uma atividade específica
 typedef struct {
     char usuario[50];
     char senha[50];
+    char matricula[20];
 } Usuario;
 
 typedef struct {
@@ -77,15 +83,18 @@ void voltarMenu() {
 
 // Função para verificar se um aluno existe no sistema
 int alunoExiste(const char *usuarioAluno) {
-    FILE *f = fopen("alunos.txt", "r");
+    FILE *f = fopen("alunos.csv", "r");
     if (!f) return 0;
     
     char linha[200];
     Usuario u;
     int existe = 0;
     
+    // Pular cabeçalho se existir
+    fgets(linha, sizeof(linha), f);
+    
     while (fgets(linha, sizeof(linha), f)) {
-        sscanf(linha, "%[^:]:%[^\n]", u.usuario, u.senha);
+        sscanf(linha, "%[^,],%[^,],%[^\n]", u.usuario, u.senha, u.matricula);  // ATUALIZADO
         if (strcmp(usuarioAluno, u.usuario) == 0) {
             existe = 1;
             break;
@@ -97,7 +106,7 @@ int alunoExiste(const char *usuarioAluno) {
 
 // Função para listar todos os alunos cadastrados (apenas nomes)
 void listarAlunosCadastrados() {
-    FILE *f = fopen("alunos.txt", "r");
+    FILE *f = fopen("alunos.csv", "r");
     if (!f) {
         printf("Nenhum aluno cadastrado no sistema.\n");
         voltarMenu();
@@ -109,9 +118,12 @@ void listarAlunosCadastrados() {
     Usuario u;
     int count = 0;
     
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f);
+    
     while (fgets(linha, sizeof(linha), f)) {
-        sscanf(linha, "%[^:]:%[^\n]", u.usuario, u.senha);
-        printf("%d. %s\n", ++count, u.usuario);
+        sscanf(linha, "%[^,],%[^,],%[^\n]", u.usuario, u.senha, u.matricula); 
+        printf("%d. %s (Matrícula: %s)\n", ++count, u.usuario, u.matricula);  
     }
     
     if (count == 0) {
@@ -126,7 +138,7 @@ void listarAlunosCadastrados() {
 
 // Função para listar todas as turmas cadastradas
 void listarTurmas() {
-    FILE *f = fopen("turmas.txt", "r");
+    FILE *f = fopen("turmas.csv", "r");
     if (!f) {
         printf("Nenhuma turma cadastrada.\n");
         return;
@@ -134,10 +146,15 @@ void listarTurmas() {
     
     printf("\n=== Turmas Cadastradas ===\n");
     char linha[200];
+    Turma t;
     int count = 0;
     
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f);
+    
     while (fgets(linha, sizeof(linha), f)) {
-        printf("%d. %s", ++count, linha);
+        sscanf(linha, "%[^,],%[^\n]", t.codigo, t.nome);
+        printf("%d. Código: %s | Nome: %s\n", ++count, t.codigo, t.nome);
     }
     
     if (count == 0) {
@@ -149,14 +166,19 @@ void listarTurmas() {
 
 // Função para verificar se uma turma existe
 int turmaExiste(const char *codigoTurma) {
-    FILE *f = fopen("turmas.txt", "r");
+    FILE *f = fopen("turmas.csv", "r");
     if (!f) return 0;
     
     char linha[200];
+    Turma t;
     int existe = 0;
     
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f);
+    
     while (fgets(linha, sizeof(linha), f)) {
-        if (strstr(linha, codigoTurma) != NULL) {
+        sscanf(linha, "%[^,],%[^\n]", t.codigo, t.nome);
+        if (strcmp(codigoTurma, t.codigo) == 0) {
             existe = 1;
             break;
         }
@@ -165,10 +187,462 @@ int turmaExiste(const char *codigoTurma) {
     return existe;
 }
 // ============================================================================
+// FUNÇÃO PARA LISTAR TURMAS DISPONÍVEIS PARA MATRÍCULA
+// ============================================================================
+void listarTurmasDisponiveis(const char *usuarioAluno) {
+    FILE *f_turmas = fopen("turmas.csv", "r");
+    if (!f_turmas) {
+        printf("Nenhuma turma disponível no momento.\n");
+        return;
+    }
+    
+    printf("\n=== Turmas Disponíveis para Matrícula ===\n");
+    char linha[200];
+    Turma t;
+    int countDisponiveis = 0;
+    int countMatriculadas = 0;
+    
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f_turmas);
+    
+    printf("\n--- Turmas Disponíveis ---\n");
+    while (fgets(linha, sizeof(linha), f_turmas)) {
+        sscanf(linha, "%[^,],%[^\n]", t.codigo, t.nome);
+        
+        // Verificar se o aluno já está matriculado
+        FILE *f_matriculas = fopen("alunos_turmas.csv", "r");
+        int jaMatriculado = 0;
+        
+        if (f_matriculas) {
+            char linha_mat[200];
+            AlunoTurma at;
+            fgets(linha_mat, sizeof(linha_mat), f_matriculas); // pular cabeçalho
+            
+            while (fgets(linha_mat, sizeof(linha_mat), f_matriculas)) {
+                sscanf(linha_mat, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
+                if (strcmp(at.usuario, usuarioAluno) == 0 && strcmp(at.codigoTurma, t.codigo) == 0) {
+                    jaMatriculado = 1;
+                    countMatriculadas++;
+                    break;
+                }
+            }
+            fclose(f_matriculas);
+        }
+        
+        if (!jaMatriculado) {
+            printf("%d. Código: %s | Nome: %s\n", ++countDisponiveis, t.codigo, t.nome);
+        }
+    }
+    
+    if (countDisponiveis == 0) {
+        printf("Nenhuma turma disponível ou você já está matriculado em todas.\n");
+    }
+    
+    printf("\nTotal de turmas disponíveis: %d\n", countDisponiveis);
+    printf("Total de turmas matriculadas: %d\n", countMatriculadas);
+    
+    fclose(f_turmas);
+}
+
+// ============================================================================
+// FUNÇÃO PARA ALUNO SE MATRICULAR EM TURMA
+// ============================================================================
+void matricularEmTurma(const char *usuarioAluno) {
+    printf("\n=== Matricular em Turma ===\n");
+    
+    // Listar turmas disponíveis
+    listarTurmasDisponiveis(usuarioAluno);
+    
+    char codigoTurma[50];
+    printf("\nDigite o código da turma que deseja se matricular: ");
+    fgets(codigoTurma, sizeof(codigoTurma), stdin);
+    codigoTurma[strcspn(codigoTurma, "\n")] = 0;
+    
+    // Verificar se a turma existe
+    if (!turmaExiste(codigoTurma)) {
+        printf("Erro: Turma não encontrada!\n");
+        return;
+    }
+    
+    // Verificar se já está matriculado
+    FILE *f_matriculas = fopen("alunos_turmas.csv", "r");
+    if (f_matriculas) {
+        char linha[200];
+        AlunoTurma at;
+        int jaMatriculado = 0;
+        
+        // Pular cabeçalho
+        fgets(linha, sizeof(linha), f_matriculas);
+        
+        while (fgets(linha, sizeof(linha), f_matriculas)) {
+            sscanf(linha, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
+            if (strcmp(at.usuario, usuarioAluno) == 0 && strcmp(at.codigoTurma, codigoTurma) == 0) {
+                jaMatriculado = 1;
+                break;
+            }
+        }
+        fclose(f_matriculas);
+        
+        if (jaMatriculado) {
+            printf("Erro: Você já está matriculado nesta turma!\n");
+            return;
+        }
+    }
+    
+    // Fazer a matrícula
+    FILE *f = fopen("alunos_turmas.csv", "a");
+    if (!f) {
+        printf("Erro ao processar matrícula!\n");
+        return;
+    }
+    
+    // Verificar se é o primeiro registro para adicionar cabeçalho
+    fseek(f, 0, SEEK_END);
+    if (ftell(f) == 0) {
+        fprintf(f, "Usuario,CodigoTurma\n");
+    }
+    
+    fprintf(f, "%s,%s\n", usuarioAluno, codigoTurma);
+    fclose(f);
+    
+    printf("Matrícula realizada com sucesso na turma '%s'!\n", codigoTurma);
+}
+
+// ============================================================================
+// FUNÇÃO PARA LISTAR TURMAS DO ALUNO
+// ============================================================================
+void listarTurmasDoAluno(const char *usuarioAluno) {
+    FILE *f = fopen("alunos_turmas.csv", "r");
+    if (!f) {
+        printf("Você não está matriculado em nenhuma turma.\n");
+        return;
+    }
+    
+    printf("\n=== Suas Turmas ===\n");
+    char linha[200];
+    AlunoTurma at;
+    Turma t;
+    int count = 0;
+    
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f);
+    
+    while (fgets(linha, sizeof(linha), f)) {
+        sscanf(linha, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
+        if (strcmp(at.usuario, usuarioAluno) == 0) {
+            // Buscar informações da turma
+            FILE *f_turmas = fopen("turmas.csv", "r");
+            if (f_turmas) {
+                char linha_turma[200];
+                // Pular cabeçalho
+                fgets(linha_turma, sizeof(linha_turma), f_turmas);
+                
+                while (fgets(linha_turma, sizeof(linha_turma), f_turmas)) {
+                    sscanf(linha_turma, "%[^,],%[^\n]", t.codigo, t.nome);
+                    if (strcmp(t.codigo, at.codigoTurma) == 0) {
+                        printf("%d. %s - %s\n", ++count, t.codigo, t.nome);
+                        break;
+                    }
+                }
+                fclose(f_turmas);
+            }
+        }
+    }
+    
+    if (count == 0) {
+        printf("Você não está matriculado em nenhuma turma.\n");
+    }
+    
+    fclose(f);
+}
+
+// ============================================================================
+// FUNÇÃO PARA SAIR DE UMA TURMA (ALUNO)
+// ============================================================================
+void sairDeTurma(const char *usuarioAluno) {
+    FILE *f = fopen("alunos_turmas.csv", "r");
+    if (!f) {
+        printf("Você não está em nenhuma turma.\n");
+        return;
+    }
+    
+    printf("\n=== Sair de Turma ===\n");
+    listarTurmasDoAluno(usuarioAluno);
+    
+    char codigoTurma[50];
+    printf("\nDigite o código da turma que deseja sair: ");
+    fgets(codigoTurma, sizeof(codigoTurma), stdin);
+    codigoTurma[strcspn(codigoTurma, "\n")] = 0;
+    
+    FILE *temp = fopen("temp.csv", "w");
+    if (!temp) {
+        printf("Erro ao processar solicitação!\n");
+        fclose(f);
+        return;
+    }
+    
+    char linha[200];
+    AlunoTurma at;
+    int removido = 0;
+    
+    // Copiar cabeçalho
+    fgets(linha, sizeof(linha), f);
+    fputs(linha, temp);
+    
+    while (fgets(linha, sizeof(linha), f)) {
+        sscanf(linha, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
+        if (strcmp(at.usuario, usuarioAluno) == 0 && strcmp(at.codigoTurma, codigoTurma) == 0) {
+            removido = 1; // Não copia esta linha (remove o vínculo)
+        } else {
+            fputs(linha, temp);
+        }
+    }
+    
+    fclose(f);
+    fclose(temp);
+    
+    remove("alunos_turmas.csv");
+    rename("temp.csv", "alunos_turmas.csv");
+    
+    if (removido) {
+        printf("Você saiu da turma '%s' com sucesso!\n", codigoTurma);
+    } else {
+        printf("Turma não encontrada ou você não está matriculado nela.\n");
+    }
+}
+
+// ============================================================================
+// FUNÇÃO PARA VER AULAS AGENDADAS DAS TURMAS DO ALUNO
+// ============================================================================
+void verAulasAgendadas(const char *usuarioAluno) {
+    // Primeiro, listar as turmas do aluno
+    FILE *f_turmas_aluno = fopen("alunos_turmas.csv", "r");
+    if (!f_turmas_aluno) {
+        printf("Você não está em nenhuma turma para ver aulas.\n");
+        return;
+    }
+    
+    printf("\n=== Aulas Agendadas das Suas Turmas ===\n");
+    
+    char linha[300];
+    AlunoTurma at;
+    int temTurmas = 0;
+    
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f_turmas_aluno);
+    
+    // Coletar turmas do aluno
+    char turmasAluno[10][50];
+    int numTurmas = 0;
+    
+    while (fgets(linha, sizeof(linha), f_turmas_aluno) && numTurmas < 10) {
+        sscanf(linha, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
+        if (strcmp(at.usuario, usuarioAluno) == 0) {
+            strcpy(turmasAluno[numTurmas], at.codigoTurma);
+            numTurmas++;
+            temTurmas = 1;
+        }
+    }
+    fclose(f_turmas_aluno);
+    
+    if (!temTurmas) {
+        printf("Você não está em nenhuma turma.\n");
+        return;
+    }
+    
+    // Buscar aulas dessas turmas
+    FILE *f_aulas = fopen("diario.csv", "r");
+    if (!f_aulas) {
+        printf("Nenhuma aula agendada.\n");
+        return;
+    }
+    
+    int count = 0;
+    
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f_aulas);
+    
+    while (fgets(linha, sizeof(linha), f_aulas)) {
+        char codigoTurma[50], data[20], tema[100], conteudo[200];
+        
+        // Ler dados da aula
+        sscanf(linha, "%[^,],%[^,],%[^,],%[^\n]", codigoTurma, data, tema, conteudo);
+        
+        // Verificar se esta aula é de uma turma do aluno
+        for (int i = 0; i < numTurmas; i++) {
+            if (strcmp(codigoTurma, turmasAluno[i]) == 0) {
+                printf("\n--- Aula %d ---\n", ++count);
+                printf("Turma: %s\n", codigoTurma);
+                printf("Data: %s\n", data);
+                printf("Tema: %s\n", tema);
+                printf("Conteúdo: %s\n", conteudo);
+                break;
+            }
+        }
+    }
+    
+    if (count == 0) {
+        printf("Nenhuma aula agendada nas suas turmas.\n");
+    } else {
+        printf("\nTotal de aulas agendadas: %d\n", count);
+    }
+    
+    fclose(f_aulas);
+}
+
+// ============================================================================
+// FUNÇÃO PARA VER ATIVIDADES DAS TURMAS DO ALUNO
+// ============================================================================
+void verAtividadesAluno(const char *usuarioAluno) {
+    // Primeiro, listar as turmas do aluno
+    FILE *f_turmas_aluno = fopen("alunos_turmas.csv", "r");
+    if (!f_turmas_aluno) {
+        printf("Você não está em nenhuma turma para ver atividades.\n");
+        return;
+    }
+    
+    printf("\n=== Atividades das Suas Turmas ===\n");
+    
+    char linha[300];
+    AlunoTurma at;
+    int temTurmas = 0;
+    
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f_turmas_aluno);
+    
+    // Coletar turmas do aluno
+    char turmasAluno[10][50];
+    int numTurmas = 0;
+    
+    while (fgets(linha, sizeof(linha), f_turmas_aluno) && numTurmas < 10) {
+        sscanf(linha, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
+        if (strcmp(at.usuario, usuarioAluno) == 0) {
+            strcpy(turmasAluno[numTurmas], at.codigoTurma);
+            numTurmas++;
+            temTurmas = 1;
+        }
+    }
+    fclose(f_turmas_aluno);
+    
+    if (!temTurmas) {
+        printf("Você não está em nenhuma turma.\n");
+        return;
+    }
+    
+    // Agora buscar atividades dessas turmas
+    FILE *f_atividades = fopen("atividades.csv", "r");
+    if (!f_atividades) {
+        printf("Nenhuma atividade disponível.\n");
+        return;
+    }
+    
+    int count = 0;
+    
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f_atividades);
+    
+    while (fgets(linha, sizeof(linha), f_atividades)) {
+        char codigoTurma[50], titulo[100], descricao[200], prazo[20];
+        
+        // Ler dados da atividade
+        sscanf(linha, "%[^,],%[^,],%[^,],%[^\n]", codigoTurma, titulo, descricao, prazo);
+        
+        // Verificar se esta atividade é de uma turma do aluno
+        for (int i = 0; i < numTurmas; i++) {
+            if (strcmp(codigoTurma, turmasAluno[i]) == 0) {
+                printf("\n--- Atividade %d ---\n", ++count);
+                printf("Turma: %s\n", codigoTurma);
+                printf("Título: %s\n", titulo);
+                printf("Descrição: %s\n", descricao);
+                printf("Prazo: %s\n", prazo);
+                printf("Status: Pendente\n");
+                break;
+            }
+        }
+    }
+    
+    if (count == 0) {
+        printf("Nenhuma atividade disponível nas suas turmas.\n");
+    } else {
+        printf("\nTotal de atividades: %d\n", count);
+    }
+    
+    fclose(f_atividades);
+}
+
+// ============================================================================
+// FUNÇÃO PARA VER NOTAS (PLACEHOLDER)
+// ============================================================================
+void verNotasAluno(const char *usuarioAluno) {
+    printf("\n=== Sistema de Notas ===\n");
+    printf("Funcionalidade em desenvolvimento...\n");
+    printf("Em breve você poderá ver suas notas aqui!\n");
+    
+    // Placeholder - mostrar turmas do aluno
+    printf("\nSuas turmas matriculadas:\n");
+    listarTurmasDoAluno(usuarioAluno);
+}
+
+// ============================================================================
+// FUNÇÃO PARA GERAR MATRÍCULA AUTOMÁTICA
+// ============================================================================
+void gerarMatricula(char *matricula, const char *arquivo) {
+    int ultimaMatricula = 0;
+    FILE *f = fopen(arquivo, "r");
+    
+    if (f) {
+        char linha[200];
+        Usuario u;
+        
+        // Pular cabeçalho
+        fgets(linha, sizeof(linha), f);
+        
+        // Encontrar a última matrícula usada
+        while (fgets(linha, sizeof(linha), f)) {
+            sscanf(linha, "%[^,],%[^,],%[^\n]", u.usuario, u.senha, u.matricula);
+            int num = atoi(u.matricula);
+            if (num > ultimaMatricula) {
+                ultimaMatricula = num;
+            }
+        }
+        fclose(f);
+    }
+    
+    // Gerar nova matrícula (sequencial)
+    ultimaMatricula++;
+    sprintf(matricula, "%08d", ultimaMatricula); // Formato: 00000001, 00000002, etc.
+}
+
+// ============================================================================
+// FUNÇÃO PARA BUSCAR USUÁRIO POR MATRÍCULA
+// ============================================================================
+int buscarPorMatricula(const char *matricula, const char *arquivo, Usuario *usuarioEncontrado) {
+    FILE *f = fopen(arquivo, "r");
+    if (!f) return 0;
+    
+    char linha[200];
+    int encontrado = 0;
+    
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f);
+    
+    while (fgets(linha, sizeof(linha), f)) {
+        sscanf(linha, "%[^,],%[^,],%[^\n]", usuarioEncontrado->usuario, 
+               usuarioEncontrado->senha, usuarioEncontrado->matricula);
+        if (strcmp(matricula, usuarioEncontrado->matricula) == 0) {
+            encontrado = 1;
+            break;
+        }
+    }
+    fclose(f);
+    return encontrado;
+}
+
+// ============================================================================
 // FUNÇÃO PARA EXCLUIR ATIVIDADE
 // ============================================================================
 void excluirAtividade() {
-    FILE *f = fopen("atividades.txt", "r");
+    FILE *f = fopen("atividades.csv", "r");
     if (!f) {
         printf("Nenhuma atividade cadastrada.\n");
         voltarMenu();
@@ -180,6 +654,8 @@ void excluirAtividade() {
     char linha[300];
     int count = 0;
     printf("\n--- Atividades Existentes ---\n");
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f);
     while (fgets(linha, sizeof(linha), f)) {
         printf("%d. %s", ++count, linha);
     }
@@ -203,8 +679,8 @@ void excluirAtividade() {
     fgets(titulo, sizeof(titulo), stdin);
     titulo[strcspn(titulo, "\n")] = 0;
 
-    f = fopen("atividades.txt", "r");
-    FILE *temp = fopen("temp.txt", "w");
+    f = fopen("atividades.csv", "r");
+    FILE *temp = fopen("temp.csv", "w");
     if (!f || !temp) {
         printf("Erro ao abrir arquivos temporários!\n");
         if (f) fclose(f);
@@ -212,6 +688,10 @@ void excluirAtividade() {
         voltarMenu();
         return;
     }
+
+    // Copiar cabeçalho
+    fgets(linha, sizeof(linha), f);
+    fputs(linha, temp);
 
     int removida = 0;
     while (fgets(linha, sizeof(linha), f)) {
@@ -224,8 +704,8 @@ void excluirAtividade() {
 
     fclose(f);
     fclose(temp);
-    remove("atividades.txt");
-    rename("temp.txt", "atividades.txt");
+    remove("atividades.csv");
+    rename("temp.csv", "atividades.csv");
 
     if (removida)
         printf("Atividade '%s' da turma '%s' excluída com sucesso!\n", titulo, codigoTurma);
@@ -255,7 +735,7 @@ void enviarAtividade() {
 
         switch (opcao) {
             case 1: {
-                FILE *f_turmas = fopen("turmas.txt", "r");
+                FILE *f_turmas = fopen("turmas.csv", "r");
                 if (!f_turmas) {
                     printf("Nenhuma turma cadastrada. Cadastre uma turma primeiro.\n");
                     voltarMenu();
@@ -293,15 +773,20 @@ void enviarAtividade() {
                 fgets(prazo, sizeof(prazo), stdin);
                 prazo[strcspn(prazo, "\n")] = 0;
 
-                FILE *f = fopen("atividades.txt", "a");
+                FILE *f = fopen("atividades.csv", "a");
                 if (!f) {
                     printf("Erro ao abrir o arquivo de atividades!\n");
                     voltarMenu();
                     break;
                 }
 
-                fprintf(f, "Turma: %s | Título: %s | Descrição: %s | Prazo: %s\n",
-                        codigoTurma, titulo, descricao, prazo);
+                // Verificar se é o primeiro registro para adicionar cabeçalho
+                fseek(f, 0, SEEK_END);
+                if (ftell(f) == 0) {
+                    fprintf(f, "CodigoTurma,Titulo,Descricao,Prazo\n");
+                }
+
+                fprintf(f, "%s,%s,%s,%s\n", codigoTurma, titulo, descricao, prazo);
                 fclose(f);
 
                 printf("\nAtividade enviada com sucesso!\n");
@@ -310,7 +795,7 @@ void enviarAtividade() {
             }
 
             case 2: {
-                FILE *f = fopen("atividades.txt", "r");
+                FILE *f = fopen("atividades.csv", "r");
                 if (!f) {
                     printf("Nenhuma atividade cadastrada.\n");
                     voltarMenu();
@@ -321,6 +806,8 @@ void enviarAtividade() {
                 char linha[300];
                 int count = 0;
 
+                // Pular cabeçalho
+                fgets(linha, sizeof(linha), f);
                 while (fgets(linha, sizeof(linha), f)) {
                     printf("%d. %s", ++count, linha);
                 }
@@ -352,7 +839,7 @@ void enviarAtividade() {
 // FUNÇÃO PARA EXCLUIR TURMA
 // ============================================================================
 void excluirTurma() {
-    FILE *f = fopen("turmas.txt", "r");
+    FILE *f = fopen("turmas.csv", "r");
     if (!f) {
         printf("Nenhuma turma cadastrada.\n");
         return;
@@ -364,7 +851,7 @@ void excluirTurma() {
     fgets(codigoExcluir, sizeof(codigoExcluir), stdin);
     codigoExcluir[strcspn(codigoExcluir, "\n")] = 0;
 
-    FILE *temp = fopen("temp.txt", "w");
+    FILE *temp = fopen("temp.csv", "w");
     if (!temp) {
         printf("Erro ao criar arquivo temporário!\n");
         fclose(f);
@@ -373,8 +860,15 @@ void excluirTurma() {
 
     char linha[200];
     int excluida = 0;
+    
+    // Copiar cabeçalho
+    fgets(linha, sizeof(linha), f);
+    fputs(linha, temp);
+    
     while (fgets(linha, sizeof(linha), f)) {
-        if (strstr(linha, codigoExcluir) == NULL) {
+        Turma t;
+        sscanf(linha, "%[^,],%[^\n]", t.codigo, t.nome);
+        if (strcmp(t.codigo, codigoExcluir) != 0) {
             fputs(linha, temp); // Mantém linhas que não contêm o código
         } else {
             excluida = 1;
@@ -384,21 +878,27 @@ void excluirTurma() {
     fclose(f);
     fclose(temp);
 
-    remove("turmas.txt");
-    rename("temp.txt", "turmas.txt");
+    remove("turmas.csv");
+    rename("temp.csv", "turmas.csv");
 
-    // Remove vínculos da turma nos alunos_turmas.txt
-    FILE *fa = fopen("alunos_turmas.txt", "r");
-    FILE *ftemp = fopen("temp.txt", "w");
+    // Remove vínculos da turma nos alunos_turmas.csv
+    FILE *fa = fopen("alunos_turmas.csv", "r");
+    FILE *ftemp = fopen("temp.csv", "w");
     if (fa && ftemp) {
+        // Copiar cabeçalho
+        fgets(linha, sizeof(linha), fa);
+        fputs(linha, ftemp);
+        
         while (fgets(linha, sizeof(linha), fa)) {
-            if (strstr(linha, codigoExcluir) == NULL)
+            AlunoTurma at;
+            sscanf(linha, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
+            if (strcmp(at.codigoTurma, codigoExcluir) != 0)
                 fputs(linha, ftemp);
         }
         fclose(fa);
         fclose(ftemp);
-        remove("alunos_turmas.txt");
-        rename("temp.txt", "alunos_turmas.txt");
+        remove("alunos_turmas.csv");
+        rename("temp.csv", "alunos_turmas.csv");
     }
 
     if (excluida)
@@ -411,7 +911,7 @@ void excluirTurma() {
 // FUNÇÃO PARA EXCLUIR ALUNO DE UMA TURMA
 // ============================================================================
 void excluirAlunoDeTurma() {
-    FILE *f = fopen("alunos_turmas.txt", "r");
+    FILE *f = fopen("alunos_turmas.csv", "r");
     if (!f) {
         printf("Nenhum aluno vinculado a turmas ainda.\n");
         return;
@@ -430,7 +930,7 @@ void excluirAlunoDeTurma() {
     fgets(codigoTurma, sizeof(codigoTurma), stdin);
     codigoTurma[strcspn(codigoTurma, "\n")] = 0;
 
-    FILE *temp = fopen("temp.txt", "w");
+    FILE *temp = fopen("temp.csv", "w");
     if (!temp) {
         printf("Erro ao criar arquivo temporário!\n");
         fclose(f);
@@ -441,8 +941,12 @@ void excluirAlunoDeTurma() {
     AlunoTurma at;
     int removido = 0;
 
+    // Copiar cabeçalho
+    fgets(linha, sizeof(linha), f);
+    fputs(linha, temp);
+
     while (fgets(linha, sizeof(linha), f)) {
-        sscanf(linha, "%[^:]:%[^\n]", at.usuario, at.codigoTurma);
+        sscanf(linha, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
         if (strcmp(at.usuario, usuarioAluno) == 0 && strcmp(at.codigoTurma, codigoTurma) == 0) {
             removido = 1;
         } else {
@@ -453,15 +957,14 @@ void excluirAlunoDeTurma() {
     fclose(f);
     fclose(temp);
 
-    remove("alunos_turmas.txt");
-    rename("temp.txt", "alunos_turmas.txt");
+    remove("alunos_turmas.csv");
+    rename("temp.csv", "alunos_turmas.csv");
 
     if (removido)
         printf("Aluno '%s' removido da turma '%s' com sucesso!\n", usuarioAluno, codigoTurma);
     else
         printf("Aluno ou turma não encontrados.\n");
 }
-
 
 // ============================================================================ 
 // FUNÇÃO PARA CADASTRAR TURMA (USO DO PROFESSOR) 
@@ -483,7 +986,7 @@ void cadastrarTurma() {
         
         switch (opcao) {
             case 1: {
-                FILE *f = fopen("turmas.txt", "a");
+                FILE *f = fopen("turmas.csv", "a");
                 if (!f) {
                     printf("Erro ao abrir o arquivo de turmas!\n");
                     break;
@@ -501,7 +1004,13 @@ void cadastrarTurma() {
                 fgets(codigoTurma, sizeof(codigoTurma), stdin);
                 codigoTurma[strcspn(codigoTurma, "\n")] = 0;
                 
-                fprintf(f, "Código: %s | Nome: %s\n", codigoTurma, nomeTurma);
+                // Verificar se é o primeiro registro para adicionar cabeçalho
+                fseek(f, 0, SEEK_END);
+                if (ftell(f) == 0) {
+                    fprintf(f, "Codigo,Nome\n");
+                }
+                
+                fprintf(f, "%s,%s\n", codigoTurma, nomeTurma);
                 fclose(f);
                 
                 printf("Turma cadastrada com sucesso!\n");
@@ -545,7 +1054,7 @@ void cadastrarAlunoEmTurma() {
         switch (opcao) {
             case 1: {
                 // Verificar se existem turmas cadastradas
-                FILE *f_turmas = fopen("turmas.txt", "r");
+                FILE *f_turmas = fopen("turmas.csv", "r");
                 if (!f_turmas) {
                     printf("Erro: Nenhuma turma cadastrada. Cadastre uma turma primeiro.\n");
                     voltarMenu();
@@ -554,7 +1063,7 @@ void cadastrarAlunoEmTurma() {
                 fclose(f_turmas);
                 
                 // Verificar se existem alunos cadastrados
-                FILE *f_alunos = fopen("alunos.txt", "r");
+                FILE *f_alunos = fopen("alunos.csv", "r");
                 if (!f_alunos) {
                     printf("Erro: Nenhum aluno cadastrado no sistema.\n");
                     voltarMenu();
@@ -582,15 +1091,18 @@ void cadastrarAlunoEmTurma() {
                 
                 // Mostrar alunos cadastrados para referência
                 printf("\n");
-                FILE *f_alunos_list = fopen("alunos.txt", "r");
+                FILE *f_alunos_list = fopen("alunos.csv", "r");
                 if (f_alunos_list) {
                     printf("=== Alunos Disponíveis ===\n");
                     char linha[200];
                     Usuario u;
                     int count = 0;
                     
+                    // Pular cabeçalho
+                    fgets(linha, sizeof(linha), f_alunos_list);
+                    
                     while (fgets(linha, sizeof(linha), f_alunos_list)) {
-                        sscanf(linha, "%[^:]:%[^\n]", u.usuario, u.senha);
+                        sscanf(linha, "%[^,],%[^\n]", u.usuario, u.senha);
                         printf("%d. %s\n", ++count, u.usuario);
                     }
                     fclose(f_alunos_list);
@@ -609,14 +1121,17 @@ void cadastrarAlunoEmTurma() {
                 }
                 
                 // Verificar se o aluno já está cadastrado nesta turma
-                FILE *f_relacao = fopen("alunos_turmas.txt", "r");
+                FILE *f_relacao = fopen("alunos_turmas.csv", "r");
                 if (f_relacao) {
                     char linha[200];
                     AlunoTurma at;
                     int jaCadastrado = 0;
                     
+                    // Pular cabeçalho
+                    fgets(linha, sizeof(linha), f_relacao);
+                    
                     while (fgets(linha, sizeof(linha), f_relacao)) {
-                        sscanf(linha, "%[^:]:%[^\n]", at.usuario, at.codigoTurma);
+                        sscanf(linha, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
                         if (strcmp(at.usuario, usuarioAluno) == 0 && strcmp(at.codigoTurma, codigoTurma) == 0) {
                             jaCadastrado = 1;
                             break;
@@ -632,14 +1147,20 @@ void cadastrarAlunoEmTurma() {
                 }
                 
                 // Cadastrar aluno na turma
-                f_relacao = fopen("alunos_turmas.txt", "a");
+                f_relacao = fopen("alunos_turmas.csv", "a");
                 if (!f_relacao) {
                     printf("Erro ao abrir arquivo de relação alunos-turmas!\n");
                     voltarMenu();
                     break;
                 }
                 
-                fprintf(f_relacao, "%s:%s\n", usuarioAluno, codigoTurma);
+                // Verificar se é o primeiro registro para adicionar cabeçalho
+                fseek(f_relacao, 0, SEEK_END);
+                if (ftell(f_relacao) == 0) {
+                    fprintf(f_relacao, "Usuario,CodigoTurma\n");
+                }
+                
+                fprintf(f_relacao, "%s,%s\n", usuarioAluno, codigoTurma);
                 fclose(f_relacao);
                 
                 printf("Aluno '%s' cadastrado com sucesso na turma '%s'!\n", usuarioAluno, codigoTurma);
@@ -695,7 +1216,7 @@ void listarAlunosDaTurma() {
                     break;
                 }
                 
-                FILE *f = fopen("alunos_turmas.txt", "r");
+                FILE *f = fopen("alunos_turmas.csv", "r");
                 if (!f) {
                     printf("Nenhum aluno cadastrado em turmas.\n");
                     voltarMenu();
@@ -707,8 +1228,11 @@ void listarAlunosDaTurma() {
                 AlunoTurma at;
                 int count = 0;
                 
+                // Pular cabeçalho
+                fgets(linha, sizeof(linha), f);
+                
                 while (fgets(linha, sizeof(linha), f)) {
-                    sscanf(linha, "%[^:]:%[^\n]", at.usuario, at.codigoTurma);
+                    sscanf(linha, "%[^,],%[^\n]", at.usuario, at.codigoTurma);
                     if (strcmp(at.codigoTurma, codigoTurma) == 0) {
                         printf("%d. %s\n", ++count, at.usuario);
                     }
@@ -759,7 +1283,7 @@ void registrarAula() {
 
         switch (opcao) {
             case 1: {
-                FILE *f_turmas = fopen("turmas.txt", "r");
+                FILE *f_turmas = fopen("turmas.csv", "r");
                 if (!f_turmas) {
                     printf("Nenhuma turma cadastrada. Cadastre uma turma primeiro.\n");
                     voltarMenu();
@@ -797,15 +1321,20 @@ void registrarAula() {
                 fgets(conteudo, sizeof(conteudo), stdin);
                 conteudo[strcspn(conteudo, "\n")] = 0;
 
-                FILE *f = fopen("diario.txt", "a");
+                FILE *f = fopen("diario.csv", "a");
                 if (!f) {
                     printf("Erro ao abrir o arquivo do diário!\n");
                     voltarMenu();
                     break;
                 }
 
-                fprintf(f, "Turma: %s | Data: %s | Tema: %s | Conteúdo: %s\n",
-                        codigoTurma, data, tema, conteudo);
+                // Verificar se é o primeiro registro para adicionar cabeçalho
+                fseek(f, 0, SEEK_END);
+                if (ftell(f) == 0) {
+                    fprintf(f, "CodigoTurma,Data,Tema,Conteudo\n");
+                }
+
+                fprintf(f, "%s,%s,%s,%s\n", codigoTurma, data, tema, conteudo);
                 fclose(f);
 
                 printf("\nAula registrada com sucesso!\n");
@@ -814,7 +1343,7 @@ void registrarAula() {
             }
 
             case 2: {
-                FILE *f = fopen("diario.txt", "r");
+                FILE *f = fopen("diario.csv", "r");
                 if (!f) {
                     printf("Nenhum registro encontrado.\n");
                     voltarMenu();
@@ -824,6 +1353,9 @@ void registrarAula() {
                 printf("\n=== Aulas Registradas ===\n");
                 char linha[300];
                 int count = 0;
+                
+                // Pular cabeçalho
+                fgets(linha, sizeof(linha), f);
                 while (fgets(linha, sizeof(linha), f)) {
                     printf("%d. %s", ++count, linha);
                 }
@@ -855,7 +1387,7 @@ void registrarAula() {
 // FUNÇÃO PARA EXCLUIR REGISTRO DE AULA
 // ============================================================================
 void excluirRegistroAula() {
-    FILE *f = fopen("diario.txt", "r");
+    FILE *f = fopen("diario.csv", "r");
     if (!f) {
         printf("Nenhum registro de aula encontrado.\n");
         voltarMenu();
@@ -868,6 +1400,8 @@ void excluirRegistroAula() {
     char linha[300];
     int count = 0;
     printf("\n--- Registros Existentes ---\n");
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f);
     while (fgets(linha, sizeof(linha), f)) {
         printf("%d. %s", ++count, linha);
     }
@@ -890,8 +1424,8 @@ void excluirRegistroAula() {
     fgets(data, sizeof(data), stdin);
     data[strcspn(data, "\n")] = 0;
 
-    f = fopen("diario.txt", "r");
-    FILE *temp = fopen("temp.txt", "w");
+    f = fopen("diario.csv", "r");
+    FILE *temp = fopen("temp.csv", "w");
     if (!f || !temp) {
         printf("Erro ao abrir arquivos!\n");
         if (f) fclose(f);
@@ -899,6 +1433,10 @@ void excluirRegistroAula() {
         voltarMenu();
         return;
     }
+
+    // Copiar cabeçalho
+    fgets(linha, sizeof(linha), f);
+    fputs(linha, temp);
 
     int removido = 0;
     while (fgets(linha, sizeof(linha), f)) {
@@ -912,8 +1450,8 @@ void excluirRegistroAula() {
     fclose(f);
     fclose(temp);
 
-    remove("diario.txt");
-    rename("temp.txt", "diario.txt");
+    remove("diario.csv");
+    rename("temp.csv", "diario.csv");
 
     if (removido)
         printf("Registro da turma '%s' na data '%s' excluído com sucesso!\n", codigoTurma, data);
@@ -922,6 +1460,67 @@ void excluirRegistroAula() {
 
     voltarMenu();
 }
+
+// ============================================================================ 
+// TELA DO ALUNO (PÓS-LOGIN) 
+// ============================================================================ 
+void menuAluno(const char *usuarioAluno) {
+    int opcao;
+    char buffer[10];
+    
+    do {
+        printf("\n====================================\n");
+        printf(" Portal do Aluno - EduGate \n");
+        printf(" Usuário: %s\n", usuarioAluno);
+        printf("====================================\n");
+        printf("1. Ver minhas turmas\n");
+        printf("2. Matricular em nova turma\n");
+        printf("3. Sair de uma turma\n");
+        printf("4. Ver atividades\n");
+        printf("5. Ver aulas agendadas\n");     
+        printf("6. Ver notas\n");
+        printf("--\n");
+        printf("7. Sair\n");
+        printf("Escolha uma opção: ");
+        fgets(buffer, sizeof(buffer), stdin);
+        opcao = atoi(buffer);
+        limparTela();
+        
+        switch (opcao) {
+            case 1:
+                printf("\n=== Minhas Turmas ===\n");
+                listarTurmasDoAluno(usuarioAluno);
+                voltarMenu();
+                break;
+            case 2:
+                matricularEmTurma(usuarioAluno);
+                voltarMenu();
+                break;
+            case 3:
+                sairDeTurma(usuarioAluno);
+                voltarMenu();
+                break;
+            case 4:
+                verAtividadesAluno(usuarioAluno);
+                voltarMenu();
+                break;
+            case 5:
+                verAulasAgendadas(usuarioAluno); 
+                voltarMenu();
+                break;
+            case 6:
+                verNotasAluno(usuarioAluno);
+                voltarMenu();
+                break;
+            case 7:
+                printf("Saindo do Portal do Aluno...\n");
+                break;
+            default:
+                printf("Opção inválida! Tente novamente.\n");
+        }
+    } while (opcao != 7);
+}
+
 
 // ============================================================================ 
 // TELA DO PROFESSOR (PÓS-LOGIN) 
@@ -935,15 +1534,14 @@ void menuProfessor() {
         printf(" Portal do Professor - EduGate \n");
         printf("====================================\n");
         printf("1. Cadastrar turma\n");
-        printf("2. Cadastrar aluno em turma\n");
-        printf("3. Registrar aula (diário eletrônico)\n");
-        printf("4. Enviar atividade\n");
-        printf("5. Consultar atividades\n"); 
+        printf("2. Registrar aula (diário eletrônico)\n");  
+        printf("3. Enviar atividade\n");                    
+        printf("4. Consultar atividades\n");                
         printf("--\n");
-        printf("6. Relação de Alunos por Turmas\n");
-        printf("7. Relação de Alunos\n");
+        printf("5. Relação de Alunos por Turmas\n");        
+        printf("6. Relação de Alunos\n");                   
         printf("--\n");
-        printf("8. Sair\n");
+        printf("7. Sair\n");                                
         printf("Escolha uma opção: ");
         fgets(buffer, sizeof(buffer), stdin);
         opcao = atoi(buffer);
@@ -954,31 +1552,29 @@ void menuProfessor() {
                 cadastrarTurma();
                 break;
             case 2:
-                cadastrarAlunoEmTurma();
-                break;
-            case 3:
                 registrarAula();
                 break;
-            case 4:
+            case 3:
                 enviarAtividade();
                 break;
-            case 5:
+            case 4:
                 printf("[Em desenvolvimento] Consultar Atividades.\n");
                 break;
-            case 6:
+            case 5:
                 listarAlunosDaTurma();
                 break;
-            case 7:
+            case 6:
                 listarAlunosCadastrados();
                 break;
-            case 8:
+            case 7:
                 printf("Saindo do Portal do Professor...\n");
                 break;
             default:
                 printf("Opção inválida! Tente novamente.\n");
         }
-    } while (opcao != 8);
+    } while (opcao != 7);
 }
+
 // ============================================================================ 
 // FUNÇÃO PARA CADASTRAR USUÁRIO (ALUNO OU PROFESSOR) 
 // ============================================================================ 
@@ -999,10 +1595,21 @@ void cadastrarUsuario(const char *arquivo, const char *tipo) {
     fgets(u.senha, sizeof(u.senha), stdin);
     u.senha[strcspn(u.senha, "\n")] = 0;
     
-    fprintf(f, "%s:%s\n", u.usuario, u.senha);
+    // GERAR MATRÍCULA AUTOMATICAMENTE
+    gerarMatricula(u.matricula, arquivo);
+    
+    // Verificar se é o primeiro registro para adicionar cabeçalho
+    fseek(f, 0, SEEK_END);
+    if (ftell(f) == 0) {
+        fprintf(f, "Usuario,Senha,Matricula\n");  // CABEÇALHO ATUALIZADO
+    }
+    
+    fprintf(f, "%s,%s,%s\n", u.usuario, u.senha, u.matricula);  // ESCRITA ATUALIZADA
     fclose(f);
     
     printf("%s cadastrado(a) com sucesso!\n", tipo);
+    printf("Sua matrícula gerada automaticamente: %s\n", u.matricula);  // MOSTRAR MATRÍCULA GERADA
+    printf("Guarde esta matrícula para futuros acessos!\n");
 }
 
 // ============================================================================ 
@@ -1029,8 +1636,11 @@ int loginUsuario(const char *arquivo, const char *tipo) {
     fgets(senha, sizeof(senha), stdin);
     senha[strcspn(senha, "\n")] = 0;
     
+    // Pular cabeçalho
+    fgets(linha, sizeof(linha), f);
+    
     while (fgets(linha, sizeof(linha), f)) {
-        sscanf(linha, "%[^:]:%[^\n]", u.usuario, u.senha);
+        sscanf(linha, "%[^,],%[^,],%[^\n]", u.usuario, u.senha, u.matricula);
         if (strcmp(usuario, u.usuario) == 0 && strcmp(senha, u.senha) == 0) {
             logado = 1;
             break;
@@ -1040,8 +1650,11 @@ int loginUsuario(const char *arquivo, const char *tipo) {
     
     if (logado) {
         printf("Login realizado com sucesso! Bem-vindo(a), %s (%s)\n", usuario, tipo);
+        printf("Matrícula: %s\n", u.matricula);
         if (strcmp(tipo, "Professor") == 0) {
             menuProfessor();
+        } else if (strcmp(tipo, "Aluno") == 0) {
+            menuAluno(usuario);  // CHAMADA DO NOVO MENU DO ALUNO
         }
         return 1;
     } else {
@@ -1049,7 +1662,6 @@ int loginUsuario(const char *arquivo, const char *tipo) {
         return 0;
     }
 }
-
 // ============================================================================ 
 // MENU PRINCIPAL — ESCOLHA ENTRE ALUNO OU PROFESSOR 
 // ============================================================================ 
@@ -1059,7 +1671,7 @@ void menuTipoUsuario() {
     
     do {
         printf("\n==============================\n");
-        printf("====== Portal EduGate ======\n");
+        printf("====== Portal EduGate =======\n");
         printf("==============================\n");
         printf("1. Login de Aluno\n");
         printf("2. Cadastro de Aluno\n");
@@ -1073,16 +1685,16 @@ void menuTipoUsuario() {
         
         switch (opcao) {
             case 1:
-                loginUsuario("alunos.txt", "Aluno");
+                loginUsuario("alunos.csv", "Aluno");
                 break;
             case 2:
-                cadastrarUsuario("alunos.txt", "Aluno");
+                cadastrarUsuario("alunos.csv", "Aluno");
                 break;
             case 3:
-                loginUsuario("professores.txt", "Professor");
+                loginUsuario("professores.csv", "Professor");
                 break;
             case 4:
-                cadastrarUsuario("professores.txt", "Professor");
+                cadastrarUsuario("professores.csv", "Professor");
                 break;
             case 5:
                 printf("Saindo do sistema...\n");
