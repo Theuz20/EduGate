@@ -4,6 +4,15 @@ import csv
 
 alunos = []
 
+def login():
+    while True:   
+        print("=== Login -- Portal EduGate ===\n")
+        print("""Por favor, faça seu login para acessar os dados restritos aos administradores. 
+        Digite seu usuário e senha para continuar.""")
+        break
+          
+
+
 def aluninhos():
     with open("output/alunos.csv", mode="r", encoding="utf-8") as arquivo_csv:
         leitor_dict = csv.DictReader(arquivo_csv)
@@ -15,8 +24,8 @@ def limpar():
 
 def menu():
     while True:
-        
-        print("\n === Portal EduGate - Relatórios e Análises ===\n")
+        limpar()
+        print("=== Portal EduGate - Relatórios e Análises ===\n")
         print("1. Ver total de alunos cadastrados")
         print("2. Ver senhas fracas")
         print("3. Ver nomes mais comuns")
@@ -26,16 +35,19 @@ def menu():
         try:
             escolha = int(input("Selecione uma opção com base no numero dela: "))
             
-            if escolha < 1 or 5 >:
+            if escolha < 1 or escolha > 5:
                 limpar()
                 print("\nErro: Opção inválida. Digite um número entre 1 e 5.")
                 input("Aperte qualquer tecla para voltar ao menu principal: ")
                 continue
-                
             elif escolha == 1:
                 total_de_alunos()
-                
+                break
+            elif escolha == 2:
+                senhas_fracas()
+                break
         except ValueError:
+            limpar()
             print("\nErro: Entrada invalida. Por favor, digite apenas numeros inteiros")
             input("Aperte qualquer tecla para voltar ao menu principal: ")
     
@@ -43,8 +55,12 @@ def menu():
 def total_de_alunos():
     limpar()
     print(f"Total de alunos cadastrados: {len(alunos)}")
-    
+
+def senhas_fracas():
+    usuarios = alunos
+    for nome in usuarios:
+        print(f"{nome["Senha"]}")
     
 if __name__ == "__main__":
     aluninhos()
-    menu()
+    login()
