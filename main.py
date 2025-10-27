@@ -1,17 +1,17 @@
 import os
 import time
 import csv
+import bycript
 
 alunos = []
 
 def login():
     while True:   
         print("=== Login -- Portal EduGate ===\n")
-        print("""Por favor, faça seu login para acessar os dados restritos aos administradores. 
-        Digite seu usuário e senha para continuar.""")
+        print("""Bem vindo! Acesse sua conta para continuar e visualizar os relatórios.""")
+        usuario = input("Usuario: ")
+        senha = input("Senha: ")
         break
-          
-
 
 def aluninhos():
     with open("output/alunos.csv", mode="r", encoding="utf-8") as arquivo_csv:
