@@ -25,13 +25,21 @@ def menu():
         
         try:
             escolha = int(input("Selecione uma opção com base no numero dela: "))
-            if escolha == 1:
+            
+            if escolha < 1 or 5 >:
+                limpar()
+                print("\nErro: Opção inválida. Digite um número entre 1 e 5.")
+                input("Aperte qualquer tecla para voltar ao menu principal: ")
+                continue
+                
+            elif escolha == 1:
                 total_de_alunos()
+                
         except ValueError:
             print("\nErro: Entrada invalida. Por favor, digite apenas numeros inteiros")
             input("Aperte qualquer tecla para voltar ao menu principal: ")
     
-    
+
 def total_de_alunos():
     limpar()
     print(f"Total de alunos cadastrados: {len(alunos)}")
