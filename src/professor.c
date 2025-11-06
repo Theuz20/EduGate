@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "util.h"
+#include <ctype.h>
 
 /* Função auxiliar segura para duplicar string */
 static char* dupString(const char* src) {
@@ -13,6 +14,7 @@ static char* dupString(const char* src) {
     return dup;
 }
 
+/* PROTÓTIPOS DAS FUNÇÕES STATIC */
 static void listarTurmas(void);
 static void cadastrarTurma(const char *usuario_professor);
 static void enviarAtividade(void);
@@ -23,7 +25,16 @@ static void registrarAula(void);
 static void verDiario(void);
 static void excluirAulaRegistrada(void);
 static void removerEntregasDaAtividade(const char *codigoTurma, const char *tituloAtividade);
+static void previsaoDesempenho(void);
 static int atualizarStatusEntrega(const char *usuario, const char *turma, const char *atividade);
+
+void preverDesempenhoAluno(const char *usuario, const char *turma);
+
+/* NOVOS PROTÓTIPOS PARA PRESENÇA */
+static int contar_alunos_presentes(const char *presenca);
+static char* obter_nome_aluno(const char *usuario);
+static char* obter_matricula_aluno(const char *usuario);
+
 
 /* Lista todas as turmas cadastradas */
 static void listarTurmas() {
@@ -525,7 +536,7 @@ static void corrigirAtividade() {
 
     /* Validar se a turma existe */
     if (!turma_existe_csv(codigoTurma)) {
-        printf("ERRO: Turma nao encontrada! Verifique o codigo e tente novamente.\n");
+        printf("ERRO: Turma nao encontrada!\n");
         return;
     }
 
@@ -614,7 +625,7 @@ static void corrigirAtividade() {
     
     FILE *fm = fopen("dados/alunos/alunos_turmas.csv", "r");
     FILE *fc = fopen("dados/cadastros/alunos.csv", "r");
-    FILE *fn = fopen("dados/alunos/notas.csv", "r");  // ABRIR ARQUIVO DE NOTAS PARA VERIFICAR
+    FILE *fn = fopen("dados/alunos/notas.csv", "r");
     
     if (!fm || !fc) {
         printf("Dados insuficientes.\n");
@@ -629,7 +640,7 @@ static void corrigirAtividade() {
     char alunos_usuario[50][64];
     char alunos_nome[50][100];
     char alunos_matricula[50][20];
-    int alunos_ja_corrigidos[50] = {0};  // ARRAY PARA CONTROLAR ALUNOS JA CORRIGIDOS
+    int alunos_ja_corrigidos[50] = {0};
 
     /* Listar alunos matriculados na turma */
     fgets(buf, sizeof(buf), fm); // cabecalho
@@ -669,16 +680,15 @@ static void corrigirAtividade() {
                 fclose(fc2);
             }
             
-            /* Verificar se entregou a atividade */
-            FILE *fe = fopen("dados/entregas/entregas.csv", "r");
+            /* ✅ VERIFICAR SE ENTREGOU - VERSÃO CORRIGIDA */
             int entregue = 0;
+            FILE *fe = fopen("dados/entregas/entregas.csv", "r");
             if (fe) {
                 char buf3[512];
                 fgets(buf3, sizeof(buf3), fe); // cabecalho
                 while (fgets(buf3, sizeof(buf3), fe)) {
                     buf3[strcspn(buf3, "\n")] = 0;
-                    char *line3 = dupString(buf3);
-                    char *u_entrega = strtok(line3, ";");
+                    char *u_entrega = strtok(buf3, ";");
                     char *t_entrega = strtok(NULL, ";");
                     char *a_entrega = strtok(NULL, ";");
                     
@@ -687,18 +697,17 @@ static void corrigirAtividade() {
                         strcmp(t_entrega, codigoTurma) == 0 &&
                         strcmp(a_entrega, tituloAtividade) == 0) {
                         entregue = 1;
-                        free(line3);
                         break;
                     }
-                    free(line3);
                 }
                 fclose(fe);
             }
 
             /* VERIFICAR SE JA FOI CORRIGIDO */
+            /* ✅ VERIFICAR SE JA FOI CORRIGIDO - VERSÃO ROBUSTA */
             int ja_corrigido = 0;
             if (fn) {
-                fseek(fn, 0, SEEK_SET); // Voltar ao inicio do arquivo
+                fseek(fn, 0, SEEK_SET);
                 char buf4[512];
                 fgets(buf4, sizeof(buf4), fn); // cabecalho
                 while (fgets(buf4, sizeof(buf4), fn)) {
@@ -765,7 +774,6 @@ static void corrigirAtividade() {
     int indice_aluno = opcao_aluno - 1;
     if (alunos_ja_corrigidos[indice_aluno]) {
         printf("ERRO: Este aluno ja teve esta atividade corrigida!\n");
-        printf("Nao e possivel atribuir uma nova nota para a mesma atividade.\n");
         return;
     }
 
@@ -808,18 +816,45 @@ static void corrigirAtividade() {
         fclose(fe);
     }
 
-    /* Solicitar nota e observacao */
+    /* ✅ VALIDAR NOTA CORRETAMENTE */
     char nota[10], observacao[200];
-    
-    printf("\nDigite a nota (0-10): ");
-    fgets(nota, sizeof(nota), stdin);
-    nota[strcspn(nota, "\n")] = 0;
+    int nota_valida = 0;
 
-    /* Validar nota */
-    float nota_float = atof(nota);
-    if (nota_float < 0 || nota_float > 10) {
-        printf("ERRO: Nota deve estar entre 0 e 10!\n");
-        return;
+    while (!nota_valida) {
+        printf("\nDigite a nota (0-10): ");
+        fgets(nota, sizeof(nota), stdin);
+        nota[strcspn(nota, "\n")] = 0;
+
+        /* Validar se é número */
+        int eh_numero = 1;
+        int pontos_decimais = 0;
+        
+        for (int i = 0; nota[i] != '\0'; i++) {
+            if (nota[i] == '.') {
+                pontos_decimais++;
+                if (pontos_decimais > 1) {
+                    eh_numero = 0;
+                    break;
+                }
+            } else if (!isdigit((unsigned char)nota[i])) {
+                eh_numero = 0;
+                break;
+            }
+        }
+        
+        if (!eh_numero) {
+            printf(" ERRO: A nota deve ser um número! Tente novamente.\n");
+            continue;
+        }
+
+        /* Validar intervalo */
+        float nota_float = atof(nota);
+        if (nota_float < 0 || nota_float > 10) {
+            printf(" ERRO: Nota deve estar entre 0 e 10! Tente novamente.\n");
+            continue;
+        }
+        
+        nota_valida = 1;
     }
 
     printf("Digite a observacao: ");
@@ -1184,6 +1219,8 @@ static void registrarAula() {
 
 /* Ver diário de aulas */
 static void verDiario() {
+    printf("\n=== Diário de Aulas ===\n");
+    
     FILE *f = fopen("dados/professores/diario.csv", "r");
     if (!f) {
         printf("Nenhum registro no diário.\n");
@@ -1191,44 +1228,365 @@ static void verDiario() {
     }
 
     char buf[512];
-    char *line = NULL;
-    char *codigo = NULL;
-    char *data = NULL;
-    char *tema = NULL;
-    char *conteudo = NULL;
-    char *presenca = NULL;
     int count = 0;
-
-    printf("\n=== Diário de Aulas ===\n");
     
-    fgets(buf, sizeof(buf), f); // Pula cabeçalho
-
+    // Pular cabeçalho
+    fgets(buf, sizeof(buf), f);
+    
+    // PRIMEIRO: Carregar todos os alunos na memória (MAIS EFICIENTE)
+    typedef struct {
+        char usuario[64];
+        char nome[100];
+        char matricula[20];
+    } AlunoInfo;
+    
+    AlunoInfo alunos[100];
+    int num_alunos = 0;
+    
+    // Carregar dados dos alunos UMA VEZ
+    FILE *f_alunos = fopen("dados/cadastros/alunos.csv", "r");
+    if (f_alunos) {
+        char buf_aluno[512];
+        fgets(buf_aluno, sizeof(buf_aluno), f_alunos); // cabeçalho
+        while (fgets(buf_aluno, sizeof(buf_aluno), f_alunos) && num_alunos < 100) {
+            buf_aluno[strcspn(buf_aluno, "\n")] = 0;
+            char *line = dupString(buf_aluno);
+            char *usuario = strtok(line, ";");
+            char *senha = strtok(NULL, ";");
+            char *matricula = strtok(NULL, ";");
+            char *nome = strtok(NULL, ";");
+            char *email = strtok(NULL, ";");
+            
+            if (usuario && nome && matricula) {
+                strncpy(alunos[num_alunos].usuario, usuario, sizeof(alunos[num_alunos].usuario) - 1);
+                strncpy(alunos[num_alunos].nome, nome, sizeof(alunos[num_alunos].nome) - 1);
+                strncpy(alunos[num_alunos].matricula, matricula, sizeof(alunos[num_alunos].matricula) - 1);
+                num_alunos++;
+            }
+            free(line);
+        }
+        fclose(f_alunos);
+    }
+    
+    // SEGUNDO: Processar o diário
     while (fgets(buf, sizeof(buf), f)) {
         buf[strcspn(buf, "\n")] = 0;
-        line = dupString(buf);
+        
+        char *line = dupString(buf);
         if (!line) continue;
         
-        codigo = strtok(line, ";");
-        data = strtok(NULL, ";");
-        tema = strtok(NULL, ";");
-        conteudo = strtok(NULL, ";");
-        presenca = strtok(NULL, ";");
-
-        printf("%d. Turma: %s | Data: %s\n", ++count, codigo ? codigo : "?", data ? data : "?");
-        printf("   Tema: %s\n", tema ? tema : "?");
-        printf("   Conteúdo: %s\n", conteudo ? conteudo : "?");
+        char *codigo = strtok(line, ";");
+        char *data = strtok(NULL, ";");
+        char *tema = strtok(NULL, ";");
+        char *conteudo = strtok(NULL, ";");
+        char *presenca = strtok(NULL, "\n");
+        
+        if (!presenca) presenca = "";
+        
+        printf("\n%d. [%s] %s\n", ++count, codigo ? codigo : "?", data ? data : "?");
+        printf("   Tema: %s\n", tema ? tema : "(sem tema)");
+        printf("   Conteúdo: %s\n", conteudo ? conteudo : "(sem conteúdo)");
         printf("   --------------------\n");
-
+        
+        // Mostrar alunos presentes
+        if (presenca && strlen(presenca) > 0) {
+            int num_presentes = 0;
+            char *lista = dupString(presenca);
+            char *aluno_usuario = strtok(lista, ",");
+            
+            printf("   ALUNOS PRESENTES:\n");
+            while (aluno_usuario) {
+                // Buscar nome do aluno na lista carregada
+                char nome_encontrado[100] = "";
+                char matricula_encontrada[20] = "";
+                
+                for (int i = 0; i < num_alunos; i++) {
+                    if (strcmp(alunos[i].usuario, aluno_usuario) == 0) {
+                        strcpy(nome_encontrado, alunos[i].nome);
+                        strcpy(matricula_encontrada, alunos[i].matricula);
+                        break;
+                    }
+                }
+                
+                if (strlen(nome_encontrado) > 0) {
+                    printf("   %d. %s (%s)\n", ++num_presentes, nome_encontrado, matricula_encontrada);
+                } else {
+                    printf("   %d. %s (usuário não encontrado)\n", ++num_presentes, aluno_usuario);
+                }
+                
+                aluno_usuario = strtok(NULL, ",");
+            }
+            free(lista);
+            
+            if (num_presentes == 0) {
+                printf("   Nenhum aluno presente\n");
+            }
+        } else {
+            printf("   NENHUM ALUNO CONFIRMOU PRESENÇA\n");
+        }
+        
+        printf("   ====================\n");
         free(line);
-        line = NULL;
     }
-
+    
     if (count == 0) {
-        printf("Nenhum registro encontrado.\n");
+        printf("Nenhuma aula registrada.\n");
     }
-
+    
     fclose(f);
 }
+
+/* =========================================================
+   NOVAS FUNÇÕES AUXILIARES
+   ========================================================= */
+static void alertasInteligentes() {
+    printf("\n============================\n");
+    printf("=== ALERTAS INTELIGENTES ===\n");
+    printf("============================\n");
+    
+    int total_alertas = 0;
+    
+    // Obter todas as turmas
+    FILE *ft = fopen("dados/professores/turmas.csv", "r");
+    if (!ft) {
+        printf("Nenhuma turma cadastrada.\n");
+        return;
+    }
+    
+    char buf[512];
+    fgets(buf, sizeof(buf), ft); // cabeçalho
+    
+    while (fgets(buf, sizeof(buf), ft)) {
+        buf[strcspn(buf, "\n")] = 0;
+        char *line = dupString(buf);
+        char *codigo = strtok(line, ";");
+        char *nome = strtok(NULL, ";");
+        
+        if (codigo && nome) {
+            printf("\nANALISANDO TURMA: %s (%s)\n", codigo, nome);
+            printf("--------------------------------------------------\n");
+            
+            // Alertas para esta turma
+            int alertas_turma = 0;
+            
+            // 1. ALERTA: Média da turma baixa
+            float media_turma = calcularMediaTurma(codigo);
+            if (media_turma > 0 && media_turma < 6.0) {
+                printf("ALERTA: Média da turma está BAIXA (%.1f/10)\n", media_turma);
+                printf("Sugestão: Revisar metodologia de ensino\n");
+                alertas_turma++;
+                total_alertas++;
+            }
+            
+            // 2. ALERTA: Alunos com muitas faltas consecutivas
+            FILE *fm = fopen("dados/alunos/alunos_turmas.csv", "r");
+            if (fm) {
+                char buf2[512];
+                fgets(buf2, sizeof(buf2), fm); // cabeçalho
+                
+                while (fgets(buf2, sizeof(buf2), fm)) {
+                    buf2[strcspn(buf2, "\n")] = 0;
+                    char *line2 = dupString(buf2);
+                    char *usuario = strtok(line2, ";");
+                    char *turma = strtok(NULL, ";");
+                    
+                    if (usuario && turma && strcmp(turma, codigo) == 0) {
+                        int faltas = contarFaltasConsecutivas(usuario, codigo);
+                        
+                        if (faltas >= 3) {
+                           // Buscar nome do aluno - CORRIGIDO
+                            char nome_aluno[100] = "";
+                            FILE *fc = fopen("dados/cadastros/alunos.csv", "r");
+                            if (fc) {
+                                char buf3[512];
+                                fgets(buf3, sizeof(buf3), fc); // cabecalho
+                                while (fgets(buf3, sizeof(buf3), fc)) {
+                                    buf3[strcspn(buf3, "\n")] = 0;
+                                    char *line3 = dupString(buf3);
+                                    
+                                    // ✅ CORREÇÃO: Parsing correto
+                                    char *user = strtok(line3, ";");
+                                    char *senha_hash = strtok(NULL, ";");
+                                    char *matricula = strtok(NULL, ";");  
+                                    char *nome_a = strtok(NULL, ";");     // Nome é o 4º campo
+                                    char *email = strtok(NULL, ";");
+                                    
+                                    if (user && strcmp(user, usuario) == 0 && nome_a) {
+                                        strcpy(nome_aluno, nome_a);
+                                        free(line3);
+                                        break;
+                                    }
+                                    free(line3);
+                                }
+                                fclose(fc);
+                            }
+                            
+                            printf("ALERTA: %s com %d faltas consecutivas\n", 
+                                   strlen(nome_aluno) > 0 ? nome_aluno : usuario, faltas);
+                            printf("Sugestão: Entrar em contato com o aluno\n");
+                            alertas_turma++;
+                            total_alertas++;
+                        }
+                        
+                        // 3. ALERTA: Queda de desempenho
+                        if (detectarQuedaDesempenho(usuario, codigo)) {
+                            char nome_aluno[100] = "";
+                            FILE *fc = fopen("dados/cadastros/alunos.csv", "r");
+                            if (fc) {
+                                char buf3[512];
+                                fgets(buf3, sizeof(buf3), fc); // cabeçalho
+                                while (fgets(buf3, sizeof(buf3), fc)) {
+                                    buf3[strcspn(buf3, "\n")] = 0;
+                                    char *line3 = dupString(buf3);
+                                    char *user = strtok(line3, ";");
+                                    char *nome_a = strtok(NULL, ";");
+                                    
+                                    if (user && strcmp(user, usuario) == 0 && nome_a) {
+                                        strcpy(nome_aluno, nome_a);
+                                        free(line3);
+                                        break;
+                                    }
+                                    free(line3);
+                                }
+                                fclose(fc);
+                            }
+                            
+                            printf("ALERTA: %s com QUEDA DE DESEMPENHO\n", 
+                                   strlen(nome_aluno) > 0 ? nome_aluno : usuario);
+                            printf("Sugestão: Oferecer apoio individual\n");
+                            alertas_turma++;
+                            total_alertas++;
+                        }
+                    }
+                    free(line2);
+                }
+                fclose(fm);
+            }
+            
+            if (alertas_turma == 0) {
+                printf("Nenhum alerta para esta turma\n");
+            }
+        }
+        free(line);
+    }
+    fclose(ft);
+    
+    printf("\n==================================================\n");
+    printf("RESUMO: %d alertas identificados no total\n", total_alertas);
+    
+    if (total_alertas == 0) {
+        printf("Todas as turmas estão com bom desempenho!\n");
+    } else {
+        printf("Revise os alertas e tome as ações sugeridas\n");
+    }
+    printf("==================================================\n");
+}
+
+static void previsaoDesempenho() {
+    printf("\n==============================\n");
+    printf("=== PREVISÃO DE DESEMPENHO ===\n");
+    printf("==============================\n");
+    
+    char codigoTurma[50];
+    char usuarioAluno[64];
+    int opcao;
+    
+    printf("Selecione o modo de previsao:\n");
+    printf("1. Previsão para turma inteira\n");
+    printf("2. Previsão para aluno especifico\n");
+    printf("\nEscolha: ");
+    
+    char input[10];
+    fgets(input, sizeof(input), stdin);
+    opcao = atoi(input);
+    
+    if (opcao == 1) {
+        // Previsão para turma inteira
+        printf("\n--- Previsão para Turma ---\n");
+        printf("Turmas disponiveis:\n");
+        listarTurmas();
+        
+        printf("Digite o codigo da turma: ");
+        fgets(codigoTurma, sizeof(codigoTurma), stdin);
+        codigoTurma[strcspn(codigoTurma, "\n")] = 0;
+        
+        if (!turma_existe_csv(codigoTurma)) {
+            printf("Turma não encontrada!\n");
+            return;
+        }
+        
+        // Buscar alunos da turma
+        FILE *fm = fopen("dados/alunos/alunos_turmas.csv", "r");
+        if (!fm) {
+            printf("Nenhum aluno matriculado.\n");
+            return;
+        }
+        
+        char buf[512];
+        int count_alunos = 0;
+        
+        fgets(buf, sizeof(buf), fm); // cabecalho
+        while (fgets(buf, sizeof(buf), fm)) {
+            buf[strcspn(buf, "\n")] = 0;
+            char *line = dupString(buf);
+            char *usuario = strtok(line, ";");
+            char *turma = strtok(NULL, ";");
+            
+            if (usuario && turma && strcmp(turma, codigoTurma) == 0) {
+                count_alunos++;
+                printf("\n========================================\n");
+                printf("ALUNO %d/%d\n", count_alunos, count_alunos);
+                printf("========================================\n");
+                preverDesempenhoAluno(usuario, codigoTurma); 
+            }
+            free(line);
+        }
+        fclose(fm);
+        
+        if (count_alunos == 0) {
+            printf("Nenhum aluno encontrado na turma.\n");
+        } else {
+            printf("\n==================================================\n");
+            printf("PREVISÃO CONCLUÍDA PARA %d ALUNOS\n", count_alunos);
+            printf("==================================================\n");
+        }
+        
+    } else if (opcao == 2) {
+        // Previsão para aluno específico
+        printf("\n--- Previsão para Aluno Especifico ---\n");
+        
+        printf("Digite o usuario do aluno: ");
+        fgets(usuarioAluno, sizeof(usuarioAluno), stdin);
+        usuarioAluno[strcspn(usuarioAluno, "\n")] = 0;
+        
+        // Verificar se aluno existe
+        if (!usuario_existe_csv("dados/cadastros/alunos.csv", usuarioAluno)) {
+            printf("Aluno não encontrado!\n");
+            return;
+        }
+        
+        printf("Digite o codigo da turma (ou Enter para todas): ");
+        fgets(codigoTurma, sizeof(codigoTurma), stdin);
+        codigoTurma[strcspn(codigoTurma, "\n")] = 0;
+        
+        if (strlen(codigoTurma) == 0) {
+            // Previsão geral (todas as turmas)
+            preverDesempenhoAluno(usuarioAluno, NULL);
+        } else {
+            // Previsão específica da turma
+            if (!turma_existe_csv(codigoTurma)) {
+                printf("Turma nao encontrada!\n");
+                return;
+            }
+            preverDesempenhoAluno(usuarioAluno, codigoTurma);
+        }
+        
+    } else {
+        printf("Opção invalida!\n");
+        return;
+    }
+}
+
 
 /* Menu principal do professor */
 void menuProfessor(const char *usuario) {
@@ -1251,9 +1609,12 @@ void menuProfessor(const char *usuario) {
         printf("------------------------------\n");
         printf("7. Registrar aula\n");
         printf("8. Ver diario de aulas\n");
-        printf("9. Excluir aula registrada\n");  // NOVA OPÇÃO
+        printf("9. Excluir aula registrada\n");
         printf("------------------------------\n");
-        printf("10. Sair\n");
+        printf("10. Alertas Inteligentes\n");
+        printf("11. Previsão de Desempenho\n");
+        printf("------------------------------\n");
+        printf("12. Sair\n");
         printf("\nEscolha: ");
 
         fgets(buf, sizeof(buf), stdin);
@@ -1315,11 +1676,23 @@ void menuProfessor(const char *usuario) {
                 break;
 
             case 10:
+                limparTela();
+                alertasInteligentes();
+                voltarMenu();
+                break;
+
+            case 11:
+                limparTela();
+                previsaoDesempenho();
+                voltarMenu();
+                break;
+
+            case 12:
                 printf("Saindo...\n");
                 break;
 
             default:
                 printf("Opcao invalida.\n");
         }
-    } while (opc != 10);
+    } while (opc != 12);
 }

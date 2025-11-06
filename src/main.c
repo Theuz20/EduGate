@@ -8,13 +8,48 @@
 
 /* Gera uma matrícula aleatória de 5 dígitos */
 void gerarMatriculaAleatoria(char *matricula, size_t tamanho) {
-    static int sequencia = 1;
-    snprintf(matricula, tamanho, "%05d", sequencia++);
+    int ultima_matricula = 0;
+    
+    FILE *f = fopen("dados/cadastros/alunos.csv", "r");
+    if (f) {
+        char linha[256];
+        fgets(linha, sizeof(linha), f); // Pular cabeçalho
+        
+        while (fgets(linha, sizeof(linha), f)) {
+            char temp[256];
+            strcpy(temp, linha);
+            
+            char *token = strtok(temp, ";"); // usuário
+            token = strtok(NULL, ";");       // senha  
+            token = strtok(NULL, ";");       // matrícula
+            
+            if (token) {
+                int mat = atoi(token);
+                if (mat > ultima_matricula) {
+                    ultima_matricula = mat;
+                }
+            }
+        }
+        fclose(f);
+    }
+    
+    snprintf(matricula, tamanho, "%05d", ultima_matricula + 1);
 }
 
 /* Função para executar o sistema administrativo */
 void executarSistemaAdmin() {
     printf("\nAbrindo sistema administrativo...\n");
+    
+    // Verificar se o arquivo Python existe
+    FILE *f = fopen("admin_edugate.py", "r");
+    if (!f) {
+        printf(" ERRO: Arquivo admin_edugate.py não encontrado!\n");
+        printf("Certifique-se que está na mesma pasta do programa.\n");
+        return;
+    }
+    fclose(f);
+    
+    printf("Executando sistema administrativo Python...\n");
     
 #ifdef _WIN32
     int resultado = system("python admin_edugate.py");
@@ -23,8 +58,18 @@ void executarSistemaAdmin() {
 #endif
 
     if (resultado != 0) {
-        printf("Erro ao abrir o sistema administrativo.\n");
-        printf("Verifique se o Python está instalado e o arquivo admin_edugate.py existe.\n");
+        printf(" Erro ao executar sistema administrativo.\n");
+        
+        // Tentar com python3 se python falhou
+#ifdef _WIN32
+        resultado = system("python3 admin_edugate.py");
+#else
+        resultado = system("python admin_edugate.py");
+#endif
+        
+        if (resultado != 0) {
+            printf(" Erro definitivo no sistema administrativo.\n");
+        }
     }
 }
 
@@ -81,7 +126,8 @@ int main() {
             case 1: {                
                 char usuario[64], senha[64];
                 limparTela();
-                printf("Usuário: ");
+                printf("== Login de Aluno ==\n");
+                printf("\nUsuário: ");
                 fgets(usuario, sizeof(usuario), stdin);
                 usuario[strcspn(usuario, "\n")] = 0;
 
@@ -101,7 +147,8 @@ int main() {
             case 2: {
                 char usuario[64], senha[64];
                 limparTela();
-                printf("Usuário: ");
+                printf("== Login Professor ==\n");
+                printf("\nUsuário: ");
                 fgets(usuario, sizeof(usuario), stdin);
                 usuario[strcspn(usuario, "\n")] = 0;
 
@@ -120,21 +167,20 @@ int main() {
 
             case 3: {
                 char usuario[64], senha[64], nome[100], email[100], matricula[20];
-                limparTela();
                 printf("\n=== Cadastro de Aluno ===\n");
-                
-                printf("Usuário: ");
+    
+                printf("Usuario: ");
                 fgets(usuario, sizeof(usuario), stdin);
                 usuario[strcspn(usuario, "\n")] = 0;
 
                 if (strlen(usuario) == 0) {
-                    printf("Usuário não pode ser vazio.\n");
+                    printf("Usuario nao pode ser vazio.\n");
                     break;
                 }
 
                 if (usuario_existe_csv("dados/cadastros/alunos.csv", usuario) ||
                     usuario_existe_csv("dados/cadastros/professores.csv", usuario)) {
-                    printf("Usuário já existe.\n");
+                    printf("Usuario ja existe.\n");
                     break;
                 }
 
@@ -143,7 +189,7 @@ int main() {
                 senha[strcspn(senha, "\n")] = 0;
 
                 if (strlen(senha) == 0) {
-                    printf("Senha não pode ser vazia.\n");
+                    printf("Senha nao pode ser vazia.\n");
                     break;
                 }
 
@@ -158,36 +204,41 @@ int main() {
                 /* Gera matrícula automática de 5 dígitos */
                 gerarMatriculaAleatoria(matricula, sizeof(matricula));
 
+                /* NOVO: Gerar hash da senha */
+                char *senha_hash = hash_senha(senha);
+                
                 char linha[512];
                 snprintf(linha, sizeof(linha), "%s;%s;%s;%s;%s", 
-                        usuario, senha, matricula, nome, email);
+                        usuario, senha_hash, matricula, nome, email);
 
-                if (adicionaLinhaCSV("dados/cadastros/alunos.csv", linha)) {
+                 if (adicionaLinhaCSV("dados/cadastros/alunos.csv", linha)) {
                     printf("Conta de aluno criada com sucesso!\n");
-                    printf("Sua matrícula é: %s\n", matricula);
+                    printf("Sua matricula é: %s\n", matricula);  // ✅ MOSTRA A MATRÍCULA CORRETA
+                    printf("Guarde esta matrícula para seu login!\n");
                 } else {
                     printf("Erro ao criar conta.\n");
                 }
+                
+                free(senha_hash);
                 break;
             }
 
             case 4: {
                 char usuario[64], senha[64], nome[100], email[100];
-                limparTela();
                 printf("\n=== Cadastro de Professor ===\n");
                 
-                printf("Usuário: ");
+                printf("Usuario: ");
                 fgets(usuario, sizeof(usuario), stdin);
                 usuario[strcspn(usuario, "\n")] = 0;
 
                 if (strlen(usuario) == 0) {
-                    printf("Usuário não pode ser vazio.\n");
+                    printf("Usuario nao pode ser vazio.\n");
                     break;
                 }
 
                 if (usuario_existe_csv("dados/cadastros/professores.csv", usuario) ||
                     usuario_existe_csv("dados/cadastros/alunos.csv", usuario)) {
-                    printf("Usuário já existe.\n");
+                    printf("Usuario ja existe.\n");
                     break;
                 }
 
@@ -196,7 +247,7 @@ int main() {
                 senha[strcspn(senha, "\n")] = 0;
 
                 if (strlen(senha) == 0) {
-                    printf("Senha não pode ser vazia.\n");
+                    printf("Senha nao pode ser vazia.\n");
                     break;
                 }
 
@@ -208,15 +259,20 @@ int main() {
                 fgets(email, sizeof(email), stdin);
                 email[strcspn(email, "\n")] = 0;
 
+                /* NOVO: Gerar hash da senha */
+                char *senha_hash = hash_senha(senha);
+                
                 char linha[512];
                 snprintf(linha, sizeof(linha), "%s;%s;%s;%s", 
-                        usuario, senha, nome, email);
+                        usuario, senha_hash, nome, email);
 
                 if (adicionaLinhaCSV("dados/cadastros/professores.csv", linha)) {
                     printf("Conta de professor criada com sucesso!\n");
                 } else {
                     printf("Erro ao criar conta.\n");
                 }
+                
+                free(senha_hash); // Liberar memória do hash
                 break;
             }
 

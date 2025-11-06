@@ -261,88 +261,118 @@ static void sairDaTurma(const char *usuario) {
    FUNÇÃO: confirmarPresenca
    ========================================================= */
 static void confirmarPresenca(const char *usuario, const char *codigoTurma, const char *dataAula) {
-    FILE *f = fopen("dados/professores/diario.csv", "r");
-    FILE *f_temp = fopen("dados/professores/temp.csv", "w");
+    printf("\n=== Confirmar Presença ===\n");
     
-    if (!f || !f_temp) {
-        printf("Erro ao abrir arquivos.\n");
-        if (f) fclose(f);
-        if (f_temp) fclose(f_temp);
+    // 1. Ler TODO o conteúdo do diario.csv
+    FILE *f = fopen("dados/professores/diario.csv", "r");
+    if (!f) {
+        printf(" ERRO: Nenhuma aula registrada.\n");
         return;
     }
 
+    char **linhas = NULL;
+    int num_linhas = 0;
     char buf[512];
-    int encontrou = 0;
-
-    /* Copiar cabecalho */
-    fgets(buf, sizeof(buf), f);
-    fprintf(f_temp, "%s", buf);
-
-    /* Processar linhas */
+    int aula_encontrada = 0;
+    int ja_confirmou = 0;
+    
+    // Ler todas as linhas para memória
     while (fgets(buf, sizeof(buf), f)) {
-        char *line = dupString(buf);
+        buf[strcspn(buf, "\n")] = 0;
+        
+        // Alocar espaço para nova linha
+        linhas = realloc(linhas, (num_linhas + 1) * sizeof(char*));
+        linhas[num_linhas] = dupString(buf);
+        num_linhas++;
+    }
+    fclose(f);
+    
+    // 2. Procurar a aula e verificar se já confirmou
+    for (int i = 1; i < num_linhas; i++) { // Começa de 1 para pular cabeçalho
+        char *line = dupString(linhas[i]);
         char *codigo = strtok(line, ";");
         char *data = strtok(NULL, ";");
         char *tema = strtok(NULL, ";");
         char *conteudo = strtok(NULL, ";");
-        char *presenca = strtok(NULL, ";");
+        char *presenca = strtok(NULL, "\n");
         
         if (codigo && data && 
             strcmp(codigo, codigoTurma) == 0 && 
             strcmp(data, dataAula) == 0) {
             
-            /* Aula encontrada - atualizar presenca */
-            encontrou = 1;
-            char nova_presenca[512];
+            aula_encontrada = 1;
             
+            // Verificar se já confirmou
             if (presenca && strlen(presenca) > 0) {
-                /* Verificar se ja esta na lista */
-                char *lista_temp = dupString(presenca);
-                char *aluno_p = strtok(lista_temp, ",");
-                int ja_presente = 0;
-                
-                while (aluno_p) {
-                    if (strcmp(aluno_p, usuario) == 0) {
-                        ja_presente = 1;
+                char *lista = dupString(presenca);
+                char *aluno = strtok(lista, ",");
+                while (aluno) {
+                    if (strcmp(aluno, usuario) == 0) {
+                        ja_confirmou = 1;
                         break;
                     }
-                    aluno_p = strtok(NULL, ",");
+                    aluno = strtok(NULL, ",");
                 }
-                free(lista_temp);
-                
-                if (!ja_presente) {
-                    /* Adicionar a lista existente */
-                    snprintf(nova_presenca, sizeof(nova_presenca), "%s,%s", presenca, usuario);
-                } else {
-                    /* Ja esta presente */
-                    strcpy(nova_presenca, presenca);
-                    printf("Voce ja confirmou presenca nesta aula.\n");
-                }
-            } else {
-                /* Primeira confirmacao de presenca */
-                snprintf(nova_presenca, sizeof(nova_presenca), "%s", usuario);
+                free(lista);
             }
             
-            fprintf(f_temp, "%s;%s;%s;%s;%s\n", codigo, data, tema, conteudo, nova_presenca);
-            printf("Presenca confirmada na aula de %s!\n", data);
-            
-        } else {
-            /* Manter linha original */
-            fprintf(f_temp, "%s", buf);
+            // ATUALIZAR DIRETAMENTE no array na memória
+            if (!ja_confirmou) {
+                char nova_presenca[512] = "";
+                if (presenca && strlen(presenca) > 0) {
+                    snprintf(nova_presenca, sizeof(nova_presenca), "%s,%s", presenca, usuario);
+                } else {
+                    snprintf(nova_presenca, sizeof(nova_presenca), "%s", usuario);
+                }
+                
+                // Liberar linha antiga e criar nova
+                free(linhas[i]);
+                linhas[i] = malloc(512);
+                snprintf(linhas[i], 512, "%s;%s;%s;%s;%s", 
+                        codigo, data, tema, conteudo, nova_presenca);
+                
+                printf(" Presença confirmada com sucesso!\n");
+            }
+            free(line);
+            break;
         }
         free(line);
     }
-
-    fclose(f);
-    fclose(f_temp);
-
-    if (encontrou) {
-        remove("dados/professores/diario.csv");
-        rename("dados/professores/temp.csv", "dados/professores/diario.csv");
-    } else {
-        remove("dados/professores/temp.csv");
-        printf("Aula nao encontrada.\n");
+    
+    if (!aula_encontrada) {
+        printf(" Aula não encontrada!\n");
+        // Liberar memória
+        for (int i = 0; i < num_linhas; i++) free(linhas[i]);
+        free(linhas);
+        return;
     }
+    
+    if (ja_confirmou) {
+        printf(" Você já confirmou presença!\n");
+        // Liberar memória
+        for (int i = 0; i < num_linhas; i++) free(linhas[i]);
+        free(linhas);
+        return;
+    }
+    
+    // 3. Escrever TUDO de volta no diario.csv
+    f = fopen("dados/professores/diario.csv", "w");
+    if (!f) {
+        printf(" ERRO ao salvar alterações.\n");
+        // Liberar memória
+        for (int i = 0; i < num_linhas; i++) free(linhas[i]);
+        free(linhas);
+        return;
+    }
+    
+    for (int i = 0; i < num_linhas; i++) {
+        fprintf(f, "%s\n", linhas[i]);
+        free(linhas[i]); // Liberar cada linha
+    }
+    free(linhas); // Liberar array
+    
+    fclose(f);
+    printf(" Alterações salvas com sucesso!\n");
 }
 
 /* =========================================================
@@ -372,6 +402,7 @@ static void verAulasAgendadas(const char *usuario) {
     int nt = 0;
     int count = 0;
     int i = 0;
+    int tem_aula_sem_presenca = 0;
 
     /* Coletar turmas do aluno */
     fgets(buf, sizeof(buf), fm); // cabecalho
@@ -421,7 +452,9 @@ static void verAulasAgendadas(const char *usuario) {
         char *data = strtok(NULL, ";");
         char *tema = strtok(NULL, ";");
         char *conteudo = strtok(NULL, ";");
-        char *presenca = strtok(NULL, ";");
+        char *presenca = strtok(NULL, "\n");
+
+        if (!presenca) presenca = "";
 
         if (codigo) {
             for (i = 0; i < nt; ++i) {
@@ -431,8 +464,8 @@ static void verAulasAgendadas(const char *usuario) {
                     printf("   Conteudo: %s\n", conteudo ? conteudo : "(sem conteudo)");
                     
                     /* Verificar se o aluno estava presente */
+                    int presente = 0;
                     if (presenca && strlen(presenca) > 0) {
-                        int presente = 0;
                         char *lista_presenca = dupString(presenca);
                         char *aluno_presenca = strtok(lista_presenca, ",");
                         
@@ -443,15 +476,14 @@ static void verAulasAgendadas(const char *usuario) {
                             }
                             aluno_presenca = strtok(NULL, ",");
                         }
-                        
-                        if (presente) {
-                            printf("   Voce esteve presente nesta aula\n");
-                        } else {
-                            printf("   Voce nao esteve presente nesta aula\n");
-                        }
                         free(lista_presenca);
+                    }
+                    
+                    if (presente) {
+                        printf("  Voce ja confirmou presenca nesta aula\n");
                     } else {
-                        printf("   Lista de presenca nao registrada\n");
+                        printf("  Voce nao confirmou presenca nesta aula\n");
+                        tem_aula_sem_presenca = 1;
                     }
                     printf("   --------------------\n");
                     break;
@@ -465,24 +497,29 @@ static void verAulasAgendadas(const char *usuario) {
     if (count == 0) {
         printf("Nenhuma aula encontrada para suas turmas.\n");
     } else {
-        /* OPCAO: Confirmar presenca */
-        printf("\n--- Opcoes ---\n");
-        printf("Deseja confirmar presenca em alguma aula? (s/n): ");
-        char opcao[10];
-        fgets(opcao, sizeof(opcao), stdin);
-        opcao[strcspn(opcao, "\n")] = 0;
-        
-        if (opcao[0] == 's' || opcao[0] == 'S') {
-            char codigo[50], data[20];
-            printf("Digite o codigo da turma: ");
-            fgets(codigo, sizeof(codigo), stdin);
-            codigo[strcspn(codigo, "\n")] = 0;
+        /* OPCAO: Confirmar presenca APENAS se houver aula sem presenca */
+        if (tem_aula_sem_presenca) {
+            printf("\n--- Opcoes ---\n");
+            printf("Deseja confirmar presenca em alguma aula? (s/n): ");
+            char opcao[10];
+            fgets(opcao, sizeof(opcao), stdin);
+            opcao[strcspn(opcao, "\n")] = 0;
             
-            printf("Digite a data da aula (DD/MM/AAAA): ");
-            fgets(data, sizeof(data), stdin);
-            data[strcspn(data, "\n")] = 0;
-            
-            confirmarPresenca(usuario, codigo, data);
+            if (opcao[0] == 's' || opcao[0] == 'S') {
+                char codigo[50], data[20];
+                printf("Digite o codigo da turma: ");
+                fgets(codigo, sizeof(codigo), stdin);
+                codigo[strcspn(codigo, "\n")] = 0;
+                
+                printf("Digite a data da aula (DD/MM/AAAA): ");
+                fgets(data, sizeof(data), stdin);
+                data[strcspn(data, "\n")] = 0;
+                
+                // 🎯 AGORA CHAMA A FUNÇÃO CORRETA!
+                confirmarPresenca(usuario, codigo, data);
+            }
+        } else {
+            printf("\nVoce ja confirmou presenca em todas as aulas disponiveis.\n");
         }
     }
 
@@ -493,117 +530,157 @@ static void verAulasAgendadas(const char *usuario) {
    FUNÇÃO: verAtividades
    ========================================================= */
 static void verAtividades(const char *usuario) {
-    if (!alunoTemTurmasMatriculadas(usuario)) {
-        printf("Voce nao esta matriculado em nenhuma turma.\n");
-        return;
-    }
-
-    FILE *ft = NULL, *fa = NULL, *fm = NULL;
-    char buf[512];
-    char turmas[20][100];
+    printf("\n=== Atividades Disponíveis ===\n");
     
-    char *line = NULL;
-    char *u = NULL;
-    char *codigo = NULL;
-    char *titulo = NULL;
-    char *descricao = NULL;
-    char *prazo = NULL;
-    char *tipo = NULL;
-    char *valor = NULL;
-    int nt = 0;
-    int count = 0;
-    int i = 0;
-
-    /* Abrir arquivos */
-    ft = fopen("dados/professores/turmas.csv", "r");
-    fa = fopen("dados/professores/atividades.csv", "r");
-    fm = fopen("dados/alunos/alunos_turmas.csv", "r");
-
-    if (!ft || !fa || !fm) {
-        printf("Dados insuficientes.\n");
-        if (ft) fclose(ft);
-        if (fa) fclose(fa);
-        if (fm) fclose(fm);
+    // Buscar TODAS as atividades primeiro
+    FILE *fa = fopen("dados/professores/atividades.csv", "r");
+    if (!fa) {
+        printf("Nenhuma atividade publicada.\n");
         return;
     }
-
-    /* Coletar turmas do aluno */
-    fgets(buf, sizeof(buf), fm); // cabecalho
-    while (fgets(buf, sizeof(buf), fm) && nt < 20) {
-        buf[strcspn(buf, "\n")] = 0;
-        line = dupString(buf);
-        if (!line) continue;
-        
-        u = strtok(line, ";");
-        codigo = strtok(NULL, ";");
-        
-        if (u && codigo && strcmp(u, usuario) == 0) {
-            strncpy(turmas[nt], codigo, sizeof(turmas[nt]) - 1);
-            turmas[nt][sizeof(turmas[nt]) - 1] = '\0';
-            nt++;
+    
+    // Buscar turmas do aluno
+    FILE *fm = fopen("dados/alunos/alunos_turmas.csv", "r");
+    if (!fm) {
+        printf("Você não está em nenhuma turma.\n");
+        fclose(fa);
+        return;
+    }
+    
+    char turmas_aluno[20][50];
+    int num_turmas = 0;
+    char buf[512];
+    
+    // Coletar turmas do aluno
+    fgets(buf, sizeof(buf), fm); // cabeçalho
+    while (fgets(buf, sizeof(buf), fm) && num_turmas < 20) {
+        char *user = strtok(buf, ";");
+        char *turma = strtok(NULL, ";");
+        if (user && turma && strcmp(user, usuario) == 0) {
+            strcpy(turmas_aluno[num_turmas], turma);
+            num_turmas++;
         }
-        free(line);
-        line = NULL;
     }
     fclose(fm);
-
-    if (nt == 0) {
-        printf("Voce nao esta em nenhuma turma.\n");
-        fclose(ft);
+    
+    if (num_turmas == 0) {
+        printf("Você não está matriculado em nenhuma turma.\n");
         fclose(fa);
         return;
     }
-
-    /* Verificar se existem atividades */
-    fgets(buf, sizeof(buf), fa); // cabecalho
-    if (!fgets(buf, sizeof(buf), fa)) {
-        printf("Nenhuma atividade publicada pelos professores.\n");
-        fclose(ft);
-        fclose(fa);
-        return;
-    }
-    fseek(fa, 0, SEEK_SET); // volta pro inicio
-    fgets(buf, sizeof(buf), fa); // cabecalho novamente
-
-    /* Listar atividades das turmas do aluno */
-    printf("\n=== Atividades para suas turmas ===\n");
+    
+    // Mostrar atividades das turmas do aluno
+    int count = 0;
+    fgets(buf, sizeof(buf), fa); // cabeçalho
     while (fgets(buf, sizeof(buf), fa)) {
-        buf[strcspn(buf, "\n")] = 0;
-
-        line = dupString(buf);
-        if (!line) continue;
-
-        codigo = strtok(line, ";");
-        titulo = strtok(NULL, ";");
-        descricao = strtok(NULL, ";");
-        prazo = strtok(NULL, ";");
-        tipo = strtok(NULL, ";");
-        valor = strtok(NULL, ";");
-
-        if (codigo) {
-            for (i = 0; i < nt; ++i) {
-                if (strcmp(codigo, turmas[i]) == 0) {
-                    printf("%d. [%s] %s\n", ++count, codigo, titulo ? titulo : "(sem titulo)");
-                    printf("   Descricao: %s\n", descricao ? descricao : "(sem descricao)");
-                    printf("   Prazo: %s | Tipo: %s | Valor: %s pontos\n", 
-                           prazo ? prazo : "-", 
-                           tipo ? tipo : "-", 
-                           valor ? valor : "-");
-                    printf("   --------------------\n");
-                    break;
-                }
+        char *codigo = strtok(buf, ";");
+        char *titulo = strtok(NULL, ";");
+        char *descricao = strtok(NULL, ";");
+        char *prazo = strtok(NULL, ";");
+        char *tipo = strtok(NULL, ";");
+        char *valor = strtok(NULL, "\n");
+        
+        // Verificar se é da turma do aluno
+        for (int i = 0; i < num_turmas; i++) {
+            if (codigo && strcmp(codigo, turmas_aluno[i]) == 0) {
+                printf("%d. [%s] %s\n", ++count, codigo, titulo);
+                printf("   Descrição: %s\n", descricao);
+                printf("   Prazo: %s | Valor: %s pontos\n", prazo, valor);
+                printf("   --------------------\n");
+                break;
             }
         }
-        free(line);
-        line = NULL;
     }
-
+    
+    fclose(fa);
+    
     if (count == 0) {
         printf("Nenhuma atividade encontrada para suas turmas.\n");
     }
+}
 
-    fclose(ft);
-    fclose(fa);
+static void recomendarAtividades(const char *usuario) {
+    printf("\n==================================\n");
+    printf("=== RECOMENDAÇÕES INTELIGENTES ===\n");
+    printf("==================================\n");
+    
+    float media = calcularMediaAluno(usuario);
+    int total_atividades = 0;
+    
+    // Contar atividades disponíveis
+    FILE *fa = fopen("dados/professores/atividades.csv", "r");
+    if (fa) {
+        char buf[512];
+        fgets(buf, sizeof(buf), fa); // cabeçalho
+        while (fgets(buf, sizeof(buf), fa)) {
+            total_atividades++;
+        }
+        fclose(fa);
+    }
+    
+    printf("Seu desempenho atual: %.1f/10\n", media);
+    printf("Total de atividades disponíveis: %d\n\n", total_atividades);
+    
+    if (media >= 9.0) {
+        printf("EXCELENTE DESEMPENHO!\n");
+        printf("--------------------------------------------------");
+        printf("\nRecomendações para você:\n");
+        printf("Desafios avançados e projetos complexos\n");
+        printf("Desenvolvimento de projetos pessoais\n");
+        printf("Mentoria para outros alunos\n");
+        printf("Participação em atividades extras\n");
+        printf("--------------------------------------------------");
+        printf("\n                     Dica: Continue se desafiando!\n");
+    }
+    else if (media >= 7.0) {
+        printf("BOM DESEMPENHO!\n");
+        printf("--------------------------------------------------");
+        printf("\nRecomendações para você:\n");
+        printf("Exercícios práticos de fixação\n");
+        printf("Estudos de caso reais\n");
+        printf("Revisão dos tópicos mais complexos\n");
+        printf("Participação em grupos de estudo\n");
+        printf("--------------------------------------------------");
+        printf("\n                      Dica: Foque na consistência!\n");
+    }
+    else if (media >= 5.0) {
+        printf("EM DESENVOLVIMENTO!\n");
+        printf("--------------------------------------------------");
+        printf("\nRecomendações para você:\n");
+        printf("Revisão completa da matéria\n");
+        printf("Exercícios básicos de fundamentos\n");
+        printf("Aulas de reforço e tutoria\n");
+        printf("Estudo em grupo colaborativo\n");
+        printf("--------------------------------------------------");
+        printf("\n                    Dica: Não pule os fundamentos!\n");
+    }
+    else {
+        printf("PRECISA DE ATENÇÃO!\n");
+        printf("--------------------------------------------------");
+        printf("\nRecomendações para você:\n");
+        printf("Revisão urgente dos conceitos básicos\n");
+        printf("Buscar ajuda do professor\n");
+        printf("Participar de todas as aulas\n");
+        printf("Fazer exercícios guiados\n");
+        printf("--------------------------------------------------");
+        printf("\n                    Dica: Peça ajuda, não desista!\n");
+    }
+    
+    printf("--------------------------------------------------");
+    
+    // Sugerir próximos passos baseado no desempenho
+    printf("\nPRÓXIMOS PASSOS SUGERIDOS:\n");
+    
+    if (total_atividades == 0) {
+        printf("Nenhuma atividade disponível no momento.\n");
+        printf("Aguarde o professor publicar novas atividades.\n");
+    } else if (media < 6.0) {
+        printf("Priorize as atividades básicas primeiro.\n");
+        printf("Foque em entender os conceitos fundamentais.\n");
+    } else {
+        printf("Explore todas as atividades disponíveis.\n");
+        printf("Mantenha o ritmo de estudos!\n");
+    }
 }
 
 /* =========================================================
@@ -752,11 +829,6 @@ static void enviarAtividade(const char *usuario) {
         return;
     }
 
-    if (!existemAtividadesParaEnvio(usuario)) {
-        printf("Nao ha atividades disponiveis para envio.\n");
-        return;
-    }
-
     char codigoTurma[50], tituloAtividade[100], arquivo[100];
     
     printf("\n=== Enviar Atividade ===\n");
@@ -785,11 +857,7 @@ static void enviarAtividade(const char *usuario) {
         return;
     }
 
-    printf("Nome do arquivo: ");
-    fgets(arquivo, sizeof(arquivo), stdin);
-    arquivo[strcspn(arquivo, "\n")] = 0;
-
-    /* Verificar se ja enviou esta atividade */
+    /* ✅ VERIFICAR SE JÁ ENVIOU - AGORA FUNCIONA */
     FILE *fe = fopen("dados/entregas/entregas.csv", "r");
     if (fe) {
         char buf[512];
@@ -805,7 +873,7 @@ static void enviarAtividade(const char *usuario) {
                 strcmp(user, usuario) == 0 && 
                 strcmp(turma, codigoTurma) == 0 && 
                 strcmp(atividade, tituloAtividade) == 0) {
-                printf("Voce ja enviou esta atividade!\n");
+                printf(" ERRO: Voce ja enviou esta atividade!\n");
                 free(line);
                 fclose(fe);
                 return;
@@ -815,6 +883,10 @@ static void enviarAtividade(const char *usuario) {
         fclose(fe);
     }
 
+    printf("Nome do arquivo: ");
+    fgets(arquivo, sizeof(arquivo), stdin);
+    arquivo[strcspn(arquivo, "\n")] = 0;
+
     char data[20];
     obter_data_atual(data, sizeof(data));
 
@@ -823,7 +895,7 @@ static void enviarAtividade(const char *usuario) {
              usuario, codigoTurma, tituloAtividade, arquivo, data);
 
     if (adicionaLinhaCSV("dados/entregas/entregas.csv", linha)) {
-        printf("Atividade enviada com sucesso!\n");
+        printf(" Atividade enviada com sucesso!\n");
     } else {
         printf("Erro ao enviar atividade.\n");
     }
@@ -1019,7 +1091,13 @@ static void verMinhasEntregas(const char *usuario) {
         if (u && strcmp(u, usuario)==0) {
             printf("%d. %s - %s\n", ++c, turma ? turma : "?", atividade ? atividade : "?");
             printf("   Arquivo: %s | Data: %s\n", arquivo ? arquivo : "?", data ? data : "?");
-            printf("   Status: %s\n", status ? status : "?");
+            
+            // ✅ MOSTRAR STATUS CORRETO
+            if (status && strcmp(status, "Corrigido") == 0) {
+                printf("   Status: CORRIGIDO\n");
+            } else {
+                printf("   Status: ENVIADO\n");
+            }
             printf("   --------------------\n");
         }
 
@@ -1030,7 +1108,7 @@ static void verMinhasEntregas(const char *usuario) {
     if (c == 0) {
         printf("Nenhuma entrega encontrada.\n");
     } else {
-        /* OPCAO: Cancelar envio */
+        /* OPCAO: Cancelar envio APENAS se não foi corrigido */
         printf("\n--- Opcoes ---\n");
         printf("Deseja cancelar alguma entrega? (s/n): ");
         char opcao[10];
@@ -1261,7 +1339,9 @@ void menuAluno(const char *usuario) {
         printf("6. Ver minhas entregas\n");
         printf("7. Ver minhas notas\n");
         printf("------------------------------\n");
-        printf("8. Sair\n");
+        printf("8. Recomendações Inteligentes\n");
+        printf("------------------------------\n");
+        printf("9. Sair\n");
         printf("\nEscolha: ");
         
         fgets(buf, sizeof(buf), stdin);
@@ -1310,12 +1390,18 @@ void menuAluno(const char *usuario) {
                 voltarMenu();
                 break;
 
-            case 8:
+            case 8:  // NOVA OPÇÃO - RECOMENDAÇÕES
+                limparTela();
+                recomendarAtividades(usuario);
+                voltarMenu();
+                break;
+
+            case 9:
                 printf("Saindo...\n");
                 break;
 
             default:
                 printf("Opcao invalida.\n");
         }
-    } while(opc != 8);
+    } while(opc != 9);
 }

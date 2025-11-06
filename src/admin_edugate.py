@@ -125,9 +125,9 @@ class AdminEduGate:
     def fazer_login(self):
         """Sistema de login para administradores cadastrados"""
         limpar_tela()
-        print("\n" + "="*50)
+        print("\n" + "="*45)
         print("||          LOGIN ADMINISTRATIVO           ||")
-        print("="*50)
+        print("="*45)
         
         admins = self.carregar_admins()
         
@@ -155,9 +155,9 @@ class AdminEduGate:
     def listar_administradores(self):
         """Lista todos os administradores cadastrados"""
         limpar_tela()
-        print("\n" + "="*60)
+        print("\n" + "="*52)
         print("||            ADMINISTRADORES CADASTRADOS         ||")
-        print("="*60)
+        print("="*52)
         
         admins = self.carregar_admins()
         
@@ -266,9 +266,9 @@ class AdminEduGate:
     def excluir_aluno(self):
         """Exclui um aluno do sistema"""
         limpar_tela()
-        print("\n" + "="*50)
+        print("\n" + "="*44)
         print("||            EXCLUIR ALUNO               ||")
-        print("="*50)
+        print("="*44)
         
         alunos = self.carregar_dados_csv("cadastros/alunos.csv")
         
@@ -343,9 +343,9 @@ class AdminEduGate:
     def excluir_professor(self):
         """Exclui um professor do sistema"""
         limpar_tela()
-        print("\n" + "="*50)
+        print("\n" + "="*45)
         print("||           EXCLUIR PROFESSOR             ||")
-        print("="*50)
+        print("="*45)
         
         professores = self.carregar_dados_csv("cadastros/professores.csv")
         
@@ -464,9 +464,9 @@ class AdminEduGate:
     def estatisticas_gerais(self):
         """Mostra estatísticas gerais do sistema"""
         limpar_tela()
-        print("\n" + "="*50)
+        print("\n" + "="*46)
         print("||            ESTATISTICAS GERAIS           ||")
-        print("="*50)
+        print("="*46)
         
         # Carregar dados
         alunos = self.carregar_dados_csv("cadastros/alunos.csv")
@@ -515,9 +515,9 @@ class AdminEduGate:
     def relacao_alunos(self):
         """Mostra relação completa de alunos"""
         limpar_tela()
-        print("\n" + "="*60)
-        print("||                RELACAO DE ALUNOS               ||")
-        print("="*60)
+        print("\n" + "="*52)
+        print("||                RELAÇÃO DE ALUNOS               ||")
+        print("="*52)
         
         alunos = self.carregar_dados_csv("cadastros/alunos.csv")
         matriculas = self.carregar_dados_csv("alunos/alunos_turmas.csv")
@@ -543,9 +543,9 @@ class AdminEduGate:
     def relacao_professores(self):
         """Mostra relação completa de professores"""
         limpar_tela()
-        print("\n" + "="*60)
-        print("||             RELACAO DE PROFESSORES            ||")
-        print("="*60)
+        print("\n" + "="*51)
+        print("||             RELAÇÃO DE PROFESSORES            ||")
+        print("="*51)
         
         professores = self.carregar_dados_csv("cadastros/professores.csv")
         turmas = self.carregar_dados_csv("professores/turmas.csv")
@@ -571,9 +571,9 @@ class AdminEduGate:
     def relacao_turmas(self):
         """Mostra relação completa de turmas"""
         limpar_tela()
-        print("\n" + "="*70)
-        print("||                  RELACAO DE TURMAS                 ||")
-        print("="*70)
+        print("\n" + "="*56)
+        print("||                  RELAÇÃO DE TURMAS                 ||")
+        print("="*56)
         
         turmas = self.carregar_dados_csv("professores/turmas.csv")
         matriculas = self.carregar_dados_csv("alunos/alunos_turmas.csv")
@@ -603,9 +603,9 @@ class AdminEduGate:
     def desempenho_alunos(self):
         """Mostra desempenho dos alunos por turma"""
         limpar_tela()
-        print("\n" + "="*60)
+        print("\n" + "="*52)
         print("||              DESEMPENHO DOS ALUNOS             ||")
-        print("="*60)
+        print("="*52)
         
         turmas = self.carregar_dados_csv("professores/turmas.csv")
         notas = self.carregar_dados_csv("alunos/notas.csv")
@@ -653,9 +653,9 @@ class AdminEduGate:
     def top_desempenho(self):
         """Mostra os alunos com melhor desempenho"""
         limpar_tela()
-        print("\n" + "="*60)
+        print("\n" + "="*51)
         print("||             TOP DESEMPENHO - ALUNOS           ||")
-        print("="*60)
+        print("="*51)
         
         alunos = self.carregar_dados_csv("cadastros/alunos.csv")
         notas = self.carregar_dados_csv("alunos/notas.csv")
@@ -708,9 +708,9 @@ class AdminEduGate:
         """Menu principal do sistema administrativo"""
         while True:
             limpar_tela()
-            print("\n" + "="*50)
+            print("\n" + "="*45)
             print("||          MENU ADMINISTRATIVO            ||")
-            print("="*50)
+            print("="*45)
             print("1. Estatisticas Gerais")
             print("2. Relacao de Alunos")
             print("3. Relacao de Professores")
@@ -720,7 +720,7 @@ class AdminEduGate:
             print("7. Gerenciar Administradores")
             print("8. Gerenciar Usuarios")
             print("9. Sair")
-            print("="*50)
+            print("="*45)
             
             opcao = input("\nEscolha uma opcao: ").strip()
             
@@ -752,14 +752,14 @@ class AdminEduGate:
         """Menu de gerenciamento de administradores"""
         while True:
             limpar_tela()
-            print("\n" + "="*50)
+            print("\n" + "="*44)
             print("||       GERENCIAR ADMINISTRADORES        ||")
-            print("="*50)
+            print("="*44)
             print("1. Listar Administradores")
             print("2. Cadastrar Novo Administrador")
             print("3. Remover Administrador")
             print("4. Voltar ao Menu Principal")
-            print("="*50)
+            print("="*44)
             
             opcao = input("\nEscolha uma opcao: ").strip()
             
@@ -780,13 +780,13 @@ class AdminEduGate:
         """Menu de gerenciamento de usuários"""
         while True:
             limpar_tela()
-            print("\n" + "="*50)
+            print("\n" + "="*43)
             print("||         GERENCIAR USUARIOS            ||")
-            print("="*50)
+            print("="*43)
             print("1. Excluir Aluno")
             print("2. Excluir Professor")
             print("3. Voltar ao Menu Principal")
-            print("="*50)
+            print("="*43)
             
             opcao = input("\nEscolha uma opcao: ").strip()
             

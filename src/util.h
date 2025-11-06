@@ -11,6 +11,12 @@ void pausarTela();
 void voltarMenu();
 void criarEstruturaPastas();
 
+float calcularMediaAluno(const char *usuario);
+
+float calcularMediaTurma(const char *codigoTurma);
+int contarFaltasConsecutivas(const char *usuario, const char *turma);
+int detectarQuedaDesempenho(const char *usuario, const char *turma);
+
 /* CSV helpers (separator is ';') */
 int arquivoExiste(const char *path);
 int adicionaLinhaCSV(const char *path, const char *linha);
@@ -33,8 +39,13 @@ int existemTurmasDisponiveis(void);
 int alunoTemTurmasMatriculadas(const char *usuario);
 int existemAtividadesParaEnvio(const char *usuario);
 
-/* NOVAS FUNÇÕES PARA VERIFICAÇÃO DE PRAZO */
+/* Funções para verificação de prazo */
 char* obterPrazoAtividade(const char *turma, const char *atividade);
 int compararDatas(const char *data1, const char *data2);
+
+/* NOVAS: Funções de hash para senhas */
+char* hash_senha(const char *senha);
+int verificar_senha(const char *senha, const char *senha_hash);
+
 
 #endif // UTIL_H
